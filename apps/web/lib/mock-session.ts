@@ -3,6 +3,7 @@ import type { SessionSnapshot } from "./contracts";
 export const mockSession: SessionSnapshot = {
   session_id: "local-preview",
   state: "FAILED",
+  network_paired: true,
   last_error: {
     code: "DEVICE_DEPTH_UNSUPPORTED",
     message: "This device cannot scan because ARCore Depth is unavailable.",

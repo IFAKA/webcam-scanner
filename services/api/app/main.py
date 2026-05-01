@@ -2,8 +2,8 @@ from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
 
-from .contracts import CapabilityReport, CreateSessionResponse, SessionSnapshot
-from .sessions import SessionStore, evaluate_capabilities
+from .contracts import CapabilityReport, CreateSessionResponse, PairSessionRequest, SessionSnapshot
+from .sessions import SessionStore
 
 app = FastAPI(title="Room Boundary Scanner API", version="0.1.0")
 store = SessionStore()
@@ -33,10 +33,21 @@ def get_session(session_id: UUID) -> SessionSnapshot:
     return snapshot
 
 
+@app.post("/sessions/{session_id}/pair", response_model=SessionSnapshot)
+def pair_session(session_id: UUID, request: PairSessionRequest) -> SessionSnapshot:
+    session = store.pair(session_id, request.pairing_token)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    snapshot = store.snapshot(session_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return snapshot
+
+
 @app.post("/sessions/{session_id}/capabilities", response_model=SessionSnapshot)
 def submit_capabilities(session_id: UUID, report: CapabilityReport) -> SessionSnapshot:
-    evaluated = evaluate_capabilities(session_id, report)
-    session = store.save_capabilities(session_id, evaluated)
+    session = store.save_capabilities(session_id, report)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 

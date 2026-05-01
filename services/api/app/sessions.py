@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from secrets import token_urlsafe
 from uuid import UUID, uuid4
 
-from .contracts import CapabilityReport, ScanState, ScannerErrorCode, SessionSnapshot
+from .contracts import CapabilityReport, ScanState, ScannerError, ScannerErrorCode, SessionSnapshot
 from .errors import make_error
 
 
@@ -11,7 +11,9 @@ class SessionRecord:
     session_id: UUID
     pairing_token: str
     state: ScanState = ScanState.CREATED
+    network_paired: bool = False
     capability_report: CapabilityReport | None = None
+    last_error: ScannerError | None = None
 
 
 class SessionStore:
@@ -31,23 +33,43 @@ class SessionStore:
         if session is None:
             return None
 
-        last_error = None
-        if session.capability_report and session.capability_report.failure_reason:
-            last_error = session.capability_report.failure_reason
-
         return SessionSnapshot(
             session_id=session.session_id,
             state=session.state,
-            last_error=last_error,
+            last_error=session.last_error,
             capability_report=session.capability_report,
+            network_paired=session.network_paired,
         )
+
+    def pair(self, session_id: UUID, pairing_token: str) -> SessionRecord | None:
+        session = self.get(session_id)
+        if session is None:
+            return None
+
+        if pairing_token != session.pairing_token:
+            session.network_paired = False
+            session.state = ScanState.FAILED
+            session.last_error = make_error(
+                ScannerErrorCode.NETWORK_PAIRING_FAILED,
+                stage="pairing",
+                session_id=session_id,
+            )
+            return session
+
+        session.network_paired = True
+        session.state = ScanState.DEVICE_CHECKING
+        session.last_error = None
+        return session
 
     def save_capabilities(self, session_id: UUID, report: CapabilityReport) -> SessionRecord | None:
         session = self.get(session_id)
         if session is None:
             return None
-        session.capability_report = report
-        session.state = ScanState.READY if report.can_scan else ScanState.FAILED
+        server_report = report.model_copy(update={"network_paired": session.network_paired})
+        evaluated = evaluate_capabilities(session_id, server_report)
+        session.capability_report = evaluated
+        session.last_error = evaluated.failure_reason
+        session.state = ScanState.READY if evaluated.can_scan else ScanState.FAILED
         return session
 
 

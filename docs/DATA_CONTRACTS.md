@@ -35,6 +35,33 @@ FAILED
 }
 ```
 
+## Pairing
+
+The local API owns pairing state. Phones submit the session token from the
+desktop UI, and the backend records whether the local pairing requirement is
+satisfied before capability reports can enable scanning.
+
+```json
+{
+  "pairing_token": "local-session-token"
+}
+```
+
+An invalid token leaves `network_paired` false and returns
+`NETWORK_PAIRING_FAILED` at the `pairing` stage.
+
+## Session Snapshot
+
+```json
+{
+  "session_id": "uuid",
+  "state": "DEVICE_CHECKING",
+  "last_error": null,
+  "capability_report": null,
+  "network_paired": true
+}
+```
+
 ## Scanner Error
 
 ```json

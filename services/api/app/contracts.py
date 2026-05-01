@@ -85,8 +85,13 @@ class CreateSessionResponse(BaseModel):
     websocket_path: str
 
 
+class PairSessionRequest(BaseModel):
+    pairing_token: str
+
+
 class SessionSnapshot(BaseModel):
     session_id: UUID
     state: ScanState
     last_error: ScannerError | None = None
     capability_report: CapabilityReport | None = None
+    network_paired: bool = False

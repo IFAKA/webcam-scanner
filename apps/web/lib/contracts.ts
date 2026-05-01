@@ -55,4 +55,5 @@ export type SessionSnapshot = {
   state: ScanState;
   last_error: ScannerError | null;
   capability_report: CapabilityReport | null;
+  network_paired: boolean;
 };
