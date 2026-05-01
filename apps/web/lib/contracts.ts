@@ -1,0 +1,58 @@
+export type ScanState =
+  | "CREATED"
+  | "PAIRING"
+  | "DEVICE_CHECKING"
+  | "READY"
+  | "SCANNING"
+  | "CAPTURE_COMPLETE"
+  | "UPLOADING"
+  | "PROCESSING"
+  | "READY_FOR_REVIEW"
+  | "EXPORTED"
+  | "FAILED";
+
+export type ScannerErrorCode =
+  | "DEVICE_ARCORE_UNSUPPORTED"
+  | "DEVICE_DEPTH_UNSUPPORTED"
+  | "DEVICE_RAW_DEPTH_UNAVAILABLE"
+  | "DEVICE_TRACKING_NOT_READY"
+  | "PERMISSION_CAMERA_DENIED"
+  | "NETWORK_PAIRING_FAILED"
+  | "NETWORK_WEBSOCKET_DROPPED"
+  | "UPLOAD_INCOMPLETE"
+  | "SESSION_SCHEMA_INVALID"
+  | "PROCESSING_POINT_CLOUD_FAILED"
+  | "PROCESSING_PLANE_FIT_FAILED"
+  | "GEOMETRY_POLYGON_INVALID"
+  | "EXPORT_FAILED"
+  | "UNKNOWN_INTERNAL_ERROR";
+
+export type ScannerError = {
+  code: ScannerErrorCode;
+  message: string;
+  stage: string;
+  recoverable: boolean;
+  details: Record<string, unknown>;
+  timestamp: string;
+  session_id: string | null;
+};
+
+export type CapabilityReport = {
+  device_model: string;
+  arcore_supported: boolean;
+  depth_supported: boolean;
+  raw_depth_available: boolean;
+  confidence_available: boolean;
+  tracking_available: boolean;
+  camera_permission: boolean;
+  network_paired: boolean;
+  can_scan: boolean;
+  failure_reason: ScannerError | null;
+};
+
+export type SessionSnapshot = {
+  session_id: string;
+  state: ScanState;
+  last_error: ScannerError | null;
+  capability_report: CapabilityReport | null;
+};
