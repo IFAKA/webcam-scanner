@@ -113,6 +113,29 @@ export type CaptureFrameSummary = {
   manifest_path: string | null;
 };
 
+export type ProcessingStatus =
+  | "BLOCKED"
+  | "READY_TO_PROCESS"
+  | "PROCESSING"
+  | "READY_FOR_REVIEW"
+  | "FAILED";
+
+export type RoomGeometry = {
+  generated_at: string;
+  source_frame_count: number;
+  floor_outline_m: [number, number][];
+  output_path: string;
+};
+
+export type ProcessingSummary = {
+  status: ProcessingStatus;
+  input_frame_count: number;
+  required_artifacts: string[];
+  available_artifacts: string[];
+  blocked_reason: string | null;
+  geometry: RoomGeometry | null;
+};
+
 export type SessionSnapshot = {
   session_id: string;
   state: ScanState;
@@ -122,4 +145,5 @@ export type SessionSnapshot = {
   network_config: LocalNetworkConfig | null;
   telemetry: TelemetrySummary;
   capture_frames: CaptureFrameSummary;
+  processing: ProcessingSummary;
 };

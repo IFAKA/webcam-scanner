@@ -37,3 +37,19 @@ export async function getSession(sessionId: string): Promise<SessionSnapshot> {
 
   return response.json() as Promise<SessionSnapshot>;
 }
+
+export async function startProcessing(sessionId: string): Promise<SessionSnapshot> {
+  const response = await fetch(`${apiBaseUrl()}/sessions/${encodeURIComponent(sessionId)}/processing/start`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Processing start failed with HTTP ${response.status}`);
+  }
+
+  return response.json() as Promise<SessionSnapshot>;
+}

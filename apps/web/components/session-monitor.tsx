@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CapabilityPanel } from "./capability-panel";
 import { DiagnosticsPanel } from "./diagnostics-panel";
 import { FrameManifestPanel } from "./frame-manifest-panel";
+import { ProcessingPanel } from "./processing-panel";
 import { TelemetryPanel } from "./telemetry-panel";
 import type { SessionSnapshot } from "../lib/contracts";
 
@@ -13,6 +14,8 @@ const POLL_INTERVAL_MS = 2_000;
 export function SessionMonitor({ initialSession }: { initialSession: SessionSnapshot }) {
   const [session, setSession] = useState(initialSession);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [processingActionError, setProcessingActionError] = useState<string | null>(null);
+  const [isStartingProcessing, setIsStartingProcessing] = useState(false);
   const shouldPoll = initialSession.session_id !== "unavailable";
 
   useEffect(() => {
@@ -58,6 +61,15 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
     if (pollError) {
       return `Session refresh blocked: ${pollError}`;
     }
+    if (processingActionError) {
+      return `Processing request blocked: ${processingActionError}`;
+    }
+    if (session.processing.status === "READY_FOR_REVIEW") {
+      return `Room geometry is ready for review from ${session.processing.input_frame_count} input frames.`;
+    }
+    if (session.processing.blocked_reason) {
+      return `Room geometry processing is blocked: ${session.processing.blocked_reason}.`;
+    }
     if (session.state === "SCANNING") {
       if (session.capture_frames.persisted_count > 0) {
         return `Backend accepted scan start. Persisted ${session.capture_frames.persisted_count} frame metadata records.`;
@@ -71,7 +83,37 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
       return `Session ${session.state}. Capability report received.`;
     }
     return "Waiting for Android capability report.";
-  }, [pollError, session.capability_report, session.capture_frames.persisted_count, session.state, session.telemetry.frame_count]);
+  }, [
+    pollError,
+    processingActionError,
+    session.capability_report,
+    session.capture_frames.persisted_count,
+    session.processing.blocked_reason,
+    session.processing.input_frame_count,
+    session.processing.status,
+    session.state,
+    session.telemetry.frame_count,
+  ]);
+
+  async function handleStartProcessing() {
+    setIsStartingProcessing(true);
+    setProcessingActionError(null);
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(session.session_id)}`, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`Processing request failed with HTTP ${response.status}`);
+      }
+      setSession((await response.json()) as SessionSnapshot);
+    } catch (error) {
+      setProcessingActionError(error instanceof Error ? error.message : "Processing request failed");
+    } finally {
+      setIsStartingProcessing(false);
+    }
+  }
 
   return (
     <>
@@ -81,6 +123,13 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
       <CapabilityPanel report={session.capability_report} lastError={session.last_error} state={session.state} />
       <TelemetryPanel state={session.state} telemetry={session.telemetry} />
       <FrameManifestPanel state={session.state} captureFrames={session.capture_frames} />
+      <ProcessingPanel
+        state={session.state}
+        processing={session.processing}
+        canStartProcessing={session.capture_frames.persisted_count > 0}
+        isStarting={isStartingProcessing}
+        onStartProcessing={handleStartProcessing}
+      />
       <DiagnosticsPanel session={session} />
     </>
   );

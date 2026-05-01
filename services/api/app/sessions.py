@@ -11,6 +11,9 @@ from .contracts import (
     CaptureFrameRecord,
     CaptureFrameSummary,
     LocalNetworkConfig,
+    ProcessingStatus,
+    ProcessingSummary,
+    RoomGeometry,
     ScanState,
     ScanTelemetrySample,
     ScannerError,
@@ -32,6 +35,8 @@ class SessionRecord:
     last_error: ScannerError | None = None
     telemetry: TelemetrySummary = field(default_factory=TelemetrySummary)
     capture_frames: CaptureFrameSummary = field(default_factory=CaptureFrameSummary)
+    capture_frame_records: list[CaptureFrameRecord] = field(default_factory=list)
+    processing: ProcessingSummary = field(default_factory=ProcessingSummary)
 
 
 class SessionStore:
@@ -65,6 +70,7 @@ class SessionStore:
             network_config=session.network_config,
             telemetry=session.telemetry,
             capture_frames=session.capture_frames,
+            processing=session.processing,
         )
 
     def pair(self, session_id: UUID, pairing_token: str) -> SessionRecord | None:
@@ -125,6 +131,68 @@ class SessionStore:
             latest_frame=record,
             manifest_path=str(manifest_path),
         )
+        session.capture_frame_records.append(record)
+        session.processing = evaluate_processing_inputs(session)
+        session.last_error = None
+        return session
+
+    def start_processing(self, session_id: UUID) -> SessionRecord | None:
+        session = self.get(session_id)
+        if session is None:
+            return None
+
+        processing = evaluate_processing_inputs(session)
+        session.processing = processing
+        if processing.status != ProcessingStatus.READY_TO_PROCESS:
+            session.last_error = make_error(
+                ScannerErrorCode.UPLOAD_INCOMPLETE,
+                stage="processing",
+                recoverable=True,
+                session_id=session_id,
+                details={
+                    "input_frame_count": processing.input_frame_count,
+                    "required_artifacts": processing.required_artifacts,
+                    "available_artifacts": processing.available_artifacts,
+                    "blocked_reason": processing.blocked_reason,
+                },
+            )
+            return session
+
+        previous_state = session.state
+        session.state = ScanState.PROCESSING
+        output_path = self._capture_root / str(session.session_id) / "review-geometry.json"
+        try:
+            geometry = RoomGeometry(
+                source_frame_count=len(session.capture_frame_records),
+                floor_outline_m=build_camera_path_outline(session.capture_frame_records),
+                output_path=str(output_path),
+            )
+        except ValueError as error:
+            session.state = previous_state
+            session.processing = ProcessingSummary(
+                status=ProcessingStatus.FAILED,
+                input_frame_count=len(session.capture_frame_records),
+                available_artifacts=processing.available_artifacts,
+                blocked_reason=str(error),
+            )
+            session.last_error = make_error(
+                ScannerErrorCode.GEOMETRY_POLYGON_INVALID,
+                stage="processing",
+                recoverable=True,
+                session_id=session_id,
+                details={"blocked_reason": str(error)},
+            )
+            return session
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(geometry.model_dump(mode="json"), separators=(",", ":")), encoding="utf-8")
+        session.processing = ProcessingSummary(
+            status=ProcessingStatus.READY_FOR_REVIEW,
+            input_frame_count=len(session.capture_frame_records),
+            available_artifacts=processing.available_artifacts,
+            blocked_reason=None,
+            geometry=geometry,
+        )
+        session.state = ScanState.READY_FOR_REVIEW
         session.last_error = None
         return session
 
@@ -219,3 +287,66 @@ def evaluate_capabilities(session_id: UUID, report: CapabilityReport) -> Capabil
             )
 
     return report.model_copy(update={"can_scan": True, "failure_reason": None})
+
+
+def evaluate_processing_inputs(session: SessionRecord) -> ProcessingSummary:
+    records = session.capture_frame_records
+    if not records:
+        return ProcessingSummary(
+            input_frame_count=0,
+            blocked_reason="Capture at least one frame metadata record before processing.",
+        )
+
+    available_artifacts = sorted(
+        {
+            artifact
+            for record in records
+            for artifact, filename in {
+                "color_image": record.metadata.color_image_filename,
+                "raw_depth": record.metadata.depth_filename,
+                "confidence": record.metadata.confidence_filename,
+            }.items()
+            if filename
+        }
+    )
+    missing_artifacts = [
+        artifact
+        for artifact in ["color_image", "raw_depth", "confidence"]
+        if artifact not in available_artifacts
+    ]
+    pending_uploads = [record.frame_id for record in records if not record.raw_artifacts_uploaded]
+    if missing_artifacts or pending_uploads:
+        reason_parts = []
+        if missing_artifacts:
+            reason_parts.append(f"missing {', '.join(missing_artifacts)} filenames")
+        if pending_uploads:
+            reason_parts.append(f"{len(pending_uploads)} frames still need raw artifact upload confirmation")
+        return ProcessingSummary(
+            status=ProcessingStatus.BLOCKED,
+            input_frame_count=len(records),
+            available_artifacts=available_artifacts,
+            blocked_reason="; ".join(reason_parts),
+        )
+
+    return ProcessingSummary(
+        status=ProcessingStatus.READY_TO_PROCESS,
+        input_frame_count=len(records),
+        available_artifacts=available_artifacts,
+        blocked_reason=None,
+    )
+
+
+def build_camera_path_outline(records: list[CaptureFrameRecord]) -> list[tuple[float, float]]:
+    points = [
+        (record.metadata.camera_position_m[0], record.metadata.camera_position_m[2])
+        for record in records
+        if record.metadata.camera_position_m is not None
+    ]
+    if len(points) < 3:
+        raise ValueError("At least three tracked camera positions are required for review geometry.")
+
+    min_x = min(point[0] for point in points)
+    max_x = max(point[0] for point in points)
+    min_z = min(point[1] for point in points)
+    max_z = max(point[1] for point in points)
+    return [(min_x, min_z), (max_x, min_z), (max_x, max_z), (min_x, max_z)]

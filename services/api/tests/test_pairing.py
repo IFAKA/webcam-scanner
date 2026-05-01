@@ -294,3 +294,55 @@ def test_scanning_session_persists_frame_metadata_manifest(tmp_path):
     lines = manifest.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2
     assert '"frame_id":"00000008"' in lines[1]
+
+
+def test_processing_is_blocked_until_frame_metadata_exists(tmp_path):
+    api = client(capture_root=tmp_path)
+    created = api.post("/sessions").json()
+
+    response = api.post(f"/sessions/{created['session_id']}/processing/start")
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["state"] == "CREATED"
+    assert snapshot["processing"]["status"] == "BLOCKED"
+    assert snapshot["processing"]["input_frame_count"] == 0
+    assert snapshot["processing"]["geometry"] is None
+    assert snapshot["last_error"]["code"] == ScannerErrorCode.UPLOAD_INCOMPLETE
+    assert snapshot["last_error"]["stage"] == "processing"
+    assert snapshot["last_error"]["recoverable"] is True
+
+
+def test_processing_is_blocked_until_raw_artifacts_are_uploaded(tmp_path):
+    api = client(capture_root=tmp_path)
+    created = api.post("/sessions").json()
+    api.post(
+        f"/sessions/{created['session_id']}/pair",
+        json={"pairing_token": created["pairing_token"]},
+    )
+    api.post(
+        f"/sessions/{created['session_id']}/capabilities",
+        json=capability_payload(network_paired=False, can_scan=False),
+    )
+    api.post(f"/sessions/{created['session_id']}/scan/start")
+    api.post(
+        f"/sessions/{created['session_id']}/frames",
+        json=frame_payload(
+            frame_index=8,
+            color_image_filename="color-000008.jpg",
+            depth_filename="depth-000008.raw",
+            confidence_filename="confidence-000008.raw",
+        ),
+    )
+
+    response = api.post(f"/sessions/{created['session_id']}/processing/start")
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["state"] == "SCANNING"
+    assert snapshot["processing"]["status"] == "BLOCKED"
+    assert snapshot["processing"]["input_frame_count"] == 1
+    assert snapshot["processing"]["available_artifacts"] == ["color_image", "confidence", "raw_depth"]
+    assert snapshot["processing"]["geometry"] is None
+    assert snapshot["last_error"]["code"] == ScannerErrorCode.UPLOAD_INCOMPLETE
+    assert "raw artifact upload confirmation" in snapshot["processing"]["blocked_reason"]

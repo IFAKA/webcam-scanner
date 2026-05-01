@@ -2,6 +2,7 @@ import { CapabilityPanel } from "../components/capability-panel";
 import { DiagnosticsPanel } from "../components/diagnostics-panel";
 import { FrameManifestPanel } from "../components/frame-manifest-panel";
 import { PairingPanel } from "../components/pairing-panel";
+import { ProcessingPanel } from "../components/processing-panel";
 import { SessionMonitor } from "../components/session-monitor";
 import { TelemetryPanel } from "../components/telemetry-panel";
 import { apiBaseUrl, createSession } from "../lib/api";
@@ -28,6 +29,14 @@ export default async function Home() {
       persisted_count: 0,
       latest_frame: null,
       manifest_path: null,
+    },
+    processing: {
+      status: "BLOCKED",
+      input_frame_count: 0,
+      required_artifacts: ["color_image", "raw_depth", "confidence"],
+      available_artifacts: [],
+      blocked_reason: "Waiting for captured scan frames.",
+      geometry: null,
     },
   };
 
@@ -59,6 +68,7 @@ export default async function Home() {
                 <CapabilityPanel report={session.capability_report} lastError={session.last_error} state={session.state} />
                 <TelemetryPanel state={session.state} telemetry={session.telemetry} />
                 <FrameManifestPanel state={session.state} captureFrames={session.capture_frames} />
+                <ProcessingPanel state={session.state} processing={session.processing} canStartProcessing={false} />
                 <DiagnosticsPanel session={session} />
               </>
             )}

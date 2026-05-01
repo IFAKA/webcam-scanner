@@ -28,13 +28,16 @@ with every code change.
 - [x] Start the scan capture flow only from a backend READY session.
 - [x] Stream live scan telemetry from Android to the backend.
 - [x] Persist captured scan frame metadata in a local upload manifest.
+- [x] Add processing endpoint and desktop status for review geometry generation
+      blocked on missing raw scan artifacts.
 
 ## Current
 
-- [ ] Process uploaded scan data into reviewable room geometry.
+- [ ] Upload raw RGB, raw depth, and confidence artifacts from Android.
 
 ## Next
 
+- [ ] Process uploaded scan data into reviewable room geometry.
 - [ ] Add desktop review controls for boundaries, dimensions, and export.
 
 ## Verification

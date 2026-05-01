@@ -148,6 +148,30 @@ class CaptureFrameSummary(BaseModel):
     manifest_path: str | None = None
 
 
+class ProcessingStatus(StrEnum):
+    BLOCKED = "BLOCKED"
+    READY_TO_PROCESS = "READY_TO_PROCESS"
+    PROCESSING = "PROCESSING"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
+    FAILED = "FAILED"
+
+
+class RoomGeometry(BaseModel):
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source_frame_count: int
+    floor_outline_m: list[tuple[float, float]]
+    output_path: str
+
+
+class ProcessingSummary(BaseModel):
+    status: ProcessingStatus = ProcessingStatus.BLOCKED
+    input_frame_count: int = 0
+    required_artifacts: list[str] = Field(default_factory=lambda: ["color_image", "raw_depth", "confidence"])
+    available_artifacts: list[str] = Field(default_factory=list)
+    blocked_reason: str | None = "Waiting for captured scan frames."
+    geometry: RoomGeometry | None = None
+
+
 class SessionSnapshot(BaseModel):
     session_id: UUID
     state: ScanState
@@ -157,3 +181,4 @@ class SessionSnapshot(BaseModel):
     network_config: LocalNetworkConfig | None = None
     telemetry: TelemetrySummary = Field(default_factory=TelemetrySummary)
     capture_frames: CaptureFrameSummary = Field(default_factory=CaptureFrameSummary)
+    processing: ProcessingSummary = Field(default_factory=ProcessingSummary)
