@@ -3,6 +3,7 @@ package dev.roomscanner
 enum class ScannerErrorCode {
     SESSION_NOT_READY_FOR_SCAN,
     SESSION_NOT_SCANNING_FOR_TELEMETRY,
+    SESSION_NOT_SCANNING_FOR_FRAME_CAPTURE,
     DEVICE_ARCORE_UNSUPPORTED,
     DEVICE_DEPTH_UNSUPPORTED,
     DEVICE_RAW_DEPTH_UNAVAILABLE,
@@ -76,4 +77,17 @@ data class ScanTelemetrySample(
     val cameraRotationQuaternion: FloatArray? = null,
     val depthFrameAvailable: Boolean,
     val confidenceFrameAvailable: Boolean,
+)
+
+data class CaptureFrameMetadata(
+    val frameIndex: Int,
+    val trackingState: String,
+    val monotonicTimestampMs: Long,
+    val cameraPositionM: FloatArray? = null,
+    val cameraRotationQuaternion: FloatArray? = null,
+    val depthFrameAvailable: Boolean,
+    val confidenceFrameAvailable: Boolean,
+    val colorImageFilename: String? = null,
+    val depthFilename: String? = null,
+    val confidenceFilename: String? = null,
 )

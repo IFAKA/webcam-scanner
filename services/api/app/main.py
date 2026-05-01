@@ -3,7 +3,14 @@ from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
 
-from .contracts import CapabilityReport, CreateSessionResponse, PairSessionRequest, ScanTelemetrySample, SessionSnapshot
+from .contracts import (
+    CapabilityReport,
+    CaptureFrameMetadata,
+    CreateSessionResponse,
+    PairSessionRequest,
+    ScanTelemetrySample,
+    SessionSnapshot,
+)
 from .network import DEFAULT_API_PORT, local_network_config
 from .sessions import SessionStore
 
@@ -79,6 +86,18 @@ def start_scan(session_id: UUID) -> SessionSnapshot:
 @app.post("/sessions/{session_id}/telemetry", response_model=SessionSnapshot)
 def submit_telemetry(session_id: UUID, sample: ScanTelemetrySample) -> SessionSnapshot:
     session = store.record_telemetry(session_id, sample)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    snapshot = store.snapshot(session_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return snapshot
+
+
+@app.post("/sessions/{session_id}/frames", response_model=SessionSnapshot)
+def submit_capture_frame(session_id: UUID, metadata: CaptureFrameMetadata) -> SessionSnapshot:
+    session = store.record_capture_frame(session_id, metadata)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 

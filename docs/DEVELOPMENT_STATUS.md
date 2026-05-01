@@ -27,14 +27,14 @@ with every code change.
 - [x] Keep scan capture blocked until all required capabilities pass.
 - [x] Start the scan capture flow only from a backend READY session.
 - [x] Stream live scan telemetry from Android to the backend.
+- [x] Persist captured scan frame metadata in a local upload manifest.
 
 ## Current
 
-- [ ] Persist captured scan frames and required metadata for upload.
+- [ ] Process uploaded scan data into reviewable room geometry.
 
 ## Next
 
-- [ ] Process uploaded scan data into reviewable room geometry.
 - [ ] Add desktop review controls for boundaries, dimensions, and export.
 
 ## Verification

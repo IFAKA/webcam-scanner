@@ -23,6 +23,7 @@ class ScanState(StrEnum):
 class ScannerErrorCode(StrEnum):
     SESSION_NOT_READY_FOR_SCAN = "SESSION_NOT_READY_FOR_SCAN"
     SESSION_NOT_SCANNING_FOR_TELEMETRY = "SESSION_NOT_SCANNING_FOR_TELEMETRY"
+    SESSION_NOT_SCANNING_FOR_FRAME_CAPTURE = "SESSION_NOT_SCANNING_FOR_FRAME_CAPTURE"
     DEVICE_ARCORE_UNSUPPORTED = "DEVICE_ARCORE_UNSUPPORTED"
     DEVICE_DEPTH_UNSUPPORTED = "DEVICE_DEPTH_UNSUPPORTED"
     DEVICE_RAW_DEPTH_UNAVAILABLE = "DEVICE_RAW_DEPTH_UNAVAILABLE"
@@ -42,6 +43,7 @@ class ScannerErrorCode(StrEnum):
 ERROR_MESSAGES: dict[ScannerErrorCode, str] = {
     ScannerErrorCode.SESSION_NOT_READY_FOR_SCAN: "The scan cannot start until the backend session is READY.",
     ScannerErrorCode.SESSION_NOT_SCANNING_FOR_TELEMETRY: "Telemetry is blocked until the backend session is SCANNING.",
+    ScannerErrorCode.SESSION_NOT_SCANNING_FOR_FRAME_CAPTURE: "Frame capture metadata is blocked until the backend session is SCANNING.",
     ScannerErrorCode.DEVICE_ARCORE_UNSUPPORTED: "This device cannot scan because ARCore is unavailable.",
     ScannerErrorCode.DEVICE_DEPTH_UNSUPPORTED: "This device cannot scan because ARCore Depth is unavailable.",
     ScannerErrorCode.DEVICE_RAW_DEPTH_UNAVAILABLE: "This device cannot scan because raw depth frames are unavailable.",
@@ -119,6 +121,33 @@ class TelemetrySummary(BaseModel):
     latest_received_at: datetime | None = None
 
 
+class CaptureFrameMetadata(BaseModel):
+    frame_index: int = Field(ge=0)
+    tracking_state: str = Field(min_length=1)
+    monotonic_timestamp_ms: int = Field(ge=0)
+    camera_position_m: tuple[float, float, float] | None = None
+    camera_rotation_quaternion: tuple[float, float, float, float] | None = None
+    depth_frame_available: bool
+    confidence_frame_available: bool
+    color_image_filename: str | None = Field(default=None, min_length=1)
+    depth_filename: str | None = Field(default=None, min_length=1)
+    confidence_filename: str | None = Field(default=None, min_length=1)
+
+
+class CaptureFrameRecord(BaseModel):
+    frame_id: str
+    metadata: CaptureFrameMetadata
+    received_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    metadata_path: str
+    raw_artifacts_uploaded: bool = False
+
+
+class CaptureFrameSummary(BaseModel):
+    persisted_count: int = 0
+    latest_frame: CaptureFrameRecord | None = None
+    manifest_path: str | None = None
+
+
 class SessionSnapshot(BaseModel):
     session_id: UUID
     state: ScanState
@@ -127,3 +156,4 @@ class SessionSnapshot(BaseModel):
     network_paired: bool = False
     network_config: LocalNetworkConfig | None = None
     telemetry: TelemetrySummary = Field(default_factory=TelemetrySummary)
+    capture_frames: CaptureFrameSummary = Field(default_factory=CaptureFrameSummary)

@@ -246,18 +246,25 @@ class MainActivity : Activity() {
                     )
                 ) {
                     is TelemetrySubmissionResult.Success -> {
-                        runOnUiThread {
-                            if (result.accepted && result.state == "SCANNING") {
-                                pairingStatus = "Live telemetry streaming. Backend received ${result.frameCount} samples."
-                                isScanStarted = true
-                            } else {
+                        if (result.accepted && result.state == "SCANNING") {
+                            val frameResult = pairingClient.submitCaptureFrame(
+                                apiBaseUrl = apiBaseUrl,
+                                sessionId = sessionId,
+                                metadata = sample.toCaptureFrameMetadata(),
+                            )
+                            runOnUiThread {
+                                handleAcceptedTelemetry(result, frameResult)
+                                updateCapabilityState()
+                            }
+                        } else {
+                            runOnUiThread {
                                 val reason = listOfNotNull(result.errorCode, result.errorMessage).joinToString(": ")
                                 pairingStatus = "Backend blocked telemetry in ${result.state}. $reason"
                                 isScanStarted = false
                                 backendReadyForScan = result.state == "READY"
                                 stopTelemetryStream()
+                                updateCapabilityState()
                             }
-                            updateCapabilityState()
                         }
                     }
                     is TelemetrySubmissionResult.Failure -> {
@@ -280,6 +287,31 @@ class MainActivity : Activity() {
         telemetryThread?.start()
     }
 
+    private fun handleAcceptedTelemetry(
+        telemetryResult: TelemetrySubmissionResult.Success,
+        frameResult: FrameSubmissionResult,
+    ) {
+        when (frameResult) {
+            is FrameSubmissionResult.Success -> {
+                if (frameResult.accepted && frameResult.state == "SCANNING") {
+                    pairingStatus = "Live telemetry streaming. Backend received ${telemetryResult.frameCount} samples and persisted ${frameResult.persistedCount} frame metadata records."
+                    isScanStarted = true
+                } else {
+                    val reason = listOfNotNull(frameResult.errorCode, frameResult.errorMessage).joinToString(": ")
+                    pairingStatus = "Backend blocked frame metadata in ${frameResult.state}. $reason"
+                    isScanStarted = false
+                    backendReadyForScan = frameResult.state == "READY"
+                    stopTelemetryStream()
+                }
+            }
+            is FrameSubmissionResult.Failure -> {
+                pairingStatus = frameResult.message
+                isScanStarted = false
+                stopTelemetryStream()
+            }
+        }
+    }
+
     private fun stopTelemetryStream() {
         isTelemetryStreaming = false
         telemetryThread?.interrupt()
@@ -298,6 +330,17 @@ class MainActivity : Activity() {
             confidenceFrameAvailable = report.confidenceAvailable,
         )
     }
+
+    private fun ScanTelemetrySample.toCaptureFrameMetadata(): CaptureFrameMetadata =
+        CaptureFrameMetadata(
+            frameIndex = frameIndex,
+            trackingState = trackingState,
+            monotonicTimestampMs = monotonicTimestampMs,
+            cameraPositionM = cameraPositionM,
+            cameraRotationQuaternion = cameraRotationQuaternion,
+            depthFrameAvailable = depthFrameAvailable,
+            confidenceFrameAvailable = confidenceFrameAvailable,
+        )
 
     private fun buildStatus(
         headline: String,

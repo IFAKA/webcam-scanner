@@ -14,6 +14,7 @@ export type ScanState =
 export type ScannerErrorCode =
   | "SESSION_NOT_READY_FOR_SCAN"
   | "SESSION_NOT_SCANNING_FOR_TELEMETRY"
+  | "SESSION_NOT_SCANNING_FOR_FRAME_CAPTURE"
   | "DEVICE_ARCORE_UNSUPPORTED"
   | "DEVICE_DEPTH_UNSUPPORTED"
   | "DEVICE_RAW_DEPTH_UNAVAILABLE"
@@ -85,6 +86,33 @@ export type TelemetrySummary = {
   latest_received_at: string | null;
 };
 
+export type CaptureFrameMetadata = {
+  frame_index: number;
+  tracking_state: string;
+  monotonic_timestamp_ms: number;
+  camera_position_m: [number, number, number] | null;
+  camera_rotation_quaternion: [number, number, number, number] | null;
+  depth_frame_available: boolean;
+  confidence_frame_available: boolean;
+  color_image_filename: string | null;
+  depth_filename: string | null;
+  confidence_filename: string | null;
+};
+
+export type CaptureFrameRecord = {
+  frame_id: string;
+  metadata: CaptureFrameMetadata;
+  received_at: string;
+  metadata_path: string;
+  raw_artifacts_uploaded: boolean;
+};
+
+export type CaptureFrameSummary = {
+  persisted_count: number;
+  latest_frame: CaptureFrameRecord | null;
+  manifest_path: string | null;
+};
+
 export type SessionSnapshot = {
   session_id: string;
   state: ScanState;
@@ -93,4 +121,5 @@ export type SessionSnapshot = {
   network_paired: boolean;
   network_config: LocalNetworkConfig | null;
   telemetry: TelemetrySummary;
+  capture_frames: CaptureFrameSummary;
 };

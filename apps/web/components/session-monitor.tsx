@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CapabilityPanel } from "./capability-panel";
 import { DiagnosticsPanel } from "./diagnostics-panel";
+import { FrameManifestPanel } from "./frame-manifest-panel";
 import { TelemetryPanel } from "./telemetry-panel";
 import type { SessionSnapshot } from "../lib/contracts";
 
@@ -58,6 +59,9 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
       return `Session refresh blocked: ${pollError}`;
     }
     if (session.state === "SCANNING") {
+      if (session.capture_frames.persisted_count > 0) {
+        return `Backend accepted scan start. Persisted ${session.capture_frames.persisted_count} frame metadata records.`;
+      }
       if (session.telemetry.frame_count > 0) {
         return `Backend accepted scan start. Live telemetry received ${session.telemetry.frame_count} samples.`;
       }
@@ -67,7 +71,7 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
       return `Session ${session.state}. Capability report received.`;
     }
     return "Waiting for Android capability report.";
-  }, [pollError, session.capability_report, session.state, session.telemetry.frame_count]);
+  }, [pollError, session.capability_report, session.capture_frames.persisted_count, session.state, session.telemetry.frame_count]);
 
   return (
     <>
@@ -76,6 +80,7 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
       </p>
       <CapabilityPanel report={session.capability_report} lastError={session.last_error} state={session.state} />
       <TelemetryPanel state={session.state} telemetry={session.telemetry} />
+      <FrameManifestPanel state={session.state} captureFrames={session.capture_frames} />
       <DiagnosticsPanel session={session} />
     </>
   );

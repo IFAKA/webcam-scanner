@@ -1,10 +1,15 @@
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from secrets import token_urlsafe
 from uuid import UUID, uuid4
 
 from .contracts import (
     CapabilityReport,
+    CaptureFrameMetadata,
+    CaptureFrameRecord,
+    CaptureFrameSummary,
     LocalNetworkConfig,
     ScanState,
     ScanTelemetrySample,
@@ -26,11 +31,13 @@ class SessionRecord:
     capability_report: CapabilityReport | None = None
     last_error: ScannerError | None = None
     telemetry: TelemetrySummary = field(default_factory=TelemetrySummary)
+    capture_frames: CaptureFrameSummary = field(default_factory=CaptureFrameSummary)
 
 
 class SessionStore:
-    def __init__(self) -> None:
+    def __init__(self, capture_root: Path | str = "captures") -> None:
         self._sessions: dict[UUID, SessionRecord] = {}
+        self._capture_root = Path(capture_root)
 
     def create(self, network_config: LocalNetworkConfig) -> SessionRecord:
         session = SessionRecord(
@@ -57,6 +64,7 @@ class SessionStore:
             network_paired=session.network_paired,
             network_config=session.network_config,
             telemetry=session.telemetry,
+            capture_frames=session.capture_frames,
         )
 
     def pair(self, session_id: UUID, pairing_token: str) -> SessionRecord | None:
@@ -76,6 +84,47 @@ class SessionStore:
 
         session.network_paired = True
         session.state = ScanState.DEVICE_CHECKING
+        session.last_error = None
+        return session
+
+    def record_capture_frame(self, session_id: UUID, metadata: CaptureFrameMetadata) -> SessionRecord | None:
+        session = self.get(session_id)
+        if session is None:
+            return None
+
+        if session.state != ScanState.SCANNING:
+            session.last_error = make_error(
+                ScannerErrorCode.SESSION_NOT_SCANNING_FOR_FRAME_CAPTURE,
+                stage="frame_capture",
+                recoverable=True,
+                session_id=session_id,
+                details={
+                    "state": session.state,
+                    "frame_index": metadata.frame_index,
+                },
+            )
+            return session
+
+        frame_id = f"{metadata.frame_index:08d}"
+        session_dir = self._capture_root / str(session.session_id)
+        manifest_path = session_dir / "frames.jsonl"
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+        record = CaptureFrameRecord(
+            frame_id=frame_id,
+            metadata=metadata,
+            metadata_path=str(manifest_path),
+            raw_artifacts_uploaded=False,
+        )
+        with manifest_path.open("a", encoding="utf-8") as manifest:
+            manifest.write(json.dumps(record.model_dump(mode="json"), separators=(",", ":")))
+            manifest.write("\n")
+
+        session.capture_frames = CaptureFrameSummary(
+            persisted_count=session.capture_frames.persisted_count + 1,
+            latest_frame=record,
+            manifest_path=str(manifest_path),
+        )
         session.last_error = None
         return session
 

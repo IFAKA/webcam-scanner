@@ -152,6 +152,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 5px;
   color: var(--ink);
+  overflow-wrap: anywhere;
   padding: 1px 4px;
 }
 

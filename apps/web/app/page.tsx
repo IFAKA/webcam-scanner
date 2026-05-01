@@ -1,5 +1,6 @@
 import { CapabilityPanel } from "../components/capability-panel";
 import { DiagnosticsPanel } from "../components/diagnostics-panel";
+import { FrameManifestPanel } from "../components/frame-manifest-panel";
 import { PairingPanel } from "../components/pairing-panel";
 import { SessionMonitor } from "../components/session-monitor";
 import { TelemetryPanel } from "../components/telemetry-panel";
@@ -22,6 +23,11 @@ export default async function Home() {
       frame_count: 0,
       latest_sample: null,
       latest_received_at: null,
+    },
+    capture_frames: {
+      persisted_count: 0,
+      latest_frame: null,
+      manifest_path: null,
     },
   };
 
@@ -52,6 +58,7 @@ export default async function Home() {
               <>
                 <CapabilityPanel report={session.capability_report} lastError={session.last_error} state={session.state} />
                 <TelemetryPanel state={session.state} telemetry={session.telemetry} />
+                <FrameManifestPanel state={session.state} captureFrames={session.capture_frames} />
                 <DiagnosticsPanel session={session} />
               </>
             )}
