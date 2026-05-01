@@ -56,6 +56,9 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
     if (pollError) {
       return `Session refresh blocked: ${pollError}`;
     }
+    if (session.state === "SCANNING") {
+      return "Backend accepted scan start. Session is SCANNING.";
+    }
     if (session.capability_report) {
       return `Session ${session.state}. Capability report received.`;
     }

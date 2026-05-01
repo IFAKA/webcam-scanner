@@ -1,6 +1,7 @@
 package dev.roomscanner
 
 enum class ScannerErrorCode {
+    SESSION_NOT_READY_FOR_SCAN,
     DEVICE_ARCORE_UNSUPPORTED,
     DEVICE_DEPTH_UNSUPPORTED,
     DEVICE_RAW_DEPTH_UNAVAILABLE,

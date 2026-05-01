@@ -113,3 +113,40 @@ def test_paired_capability_report_marks_session_ready():
     assert snapshot["capability_report"]["network_paired"] is True
     assert snapshot["capability_report"]["can_scan"] is True
     assert snapshot["last_error"] is None
+
+
+def test_scan_start_is_blocked_until_session_is_ready():
+    api = client()
+    created = api.post("/sessions").json()
+
+    response = api.post(f"/sessions/{created['session_id']}/scan/start")
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["state"] == "CREATED"
+    assert snapshot["last_error"]["code"] == ScannerErrorCode.SESSION_NOT_READY_FOR_SCAN
+    assert snapshot["last_error"]["stage"] == "scan_start"
+    assert snapshot["last_error"]["recoverable"] is True
+    assert snapshot["last_error"]["details"]["capability_report_received"] is False
+
+
+def test_scan_start_moves_ready_session_to_scanning():
+    api = client()
+    created = api.post("/sessions").json()
+    api.post(
+        f"/sessions/{created['session_id']}/pair",
+        json={"pairing_token": created["pairing_token"]},
+    )
+    api.post(
+        f"/sessions/{created['session_id']}/capabilities",
+        json=capability_payload(network_paired=False, can_scan=False),
+    )
+
+    response = api.post(f"/sessions/{created['session_id']}/scan/start")
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["state"] == "SCANNING"
+    assert snapshot["network_paired"] is True
+    assert snapshot["capability_report"]["can_scan"] is True
+    assert snapshot["last_error"] is None

@@ -20,6 +20,8 @@ class MainActivity : Activity() {
     private lateinit var gate: CapabilityGate
     private val pairingClient = PairingClient()
     private var isNetworkPaired = false
+    private var backendReadyForScan = false
+    private var isScanStarted = false
     private var pairingStatus = "Pair with the local laptop server before scanning."
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,6 +69,7 @@ class MainActivity : Activity() {
         startButton = Button(this).apply {
             text = "Start Scan"
             isEnabled = false
+            setOnClickListener { startBackendScan() }
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -84,11 +87,18 @@ class MainActivity : Activity() {
 
     private fun updateCapabilityState() {
         val (report, error) = gate.evaluate(isNetworkPaired = isNetworkPaired)
-        startButton.isEnabled = report.canScan
-        status.text = if (error == null) {
+        startButton.isEnabled = report.canScan && backendReadyForScan && !isScanStarted
+        status.text = if (isScanStarted) {
+            buildStatus("SCANNING", report, pairingStatus)
+        } else if (error == null && backendReadyForScan) {
             buildStatus("READY", report, pairingStatus)
         } else {
-            buildStatus("SCAN BLOCKED", report, "${error.code}\n${error.message}\n$pairingStatus")
+            val localBlock = if (error == null) {
+                "Backend has not accepted this session as READY yet."
+            } else {
+                "${error.code}\n${error.message}"
+            }
+            buildStatus("SCAN BLOCKED", report, "$localBlock\n$pairingStatus")
         }
     }
 
@@ -117,6 +127,8 @@ class MainActivity : Activity() {
                 when (result) {
                     is PairingResult.Success -> {
                         isNetworkPaired = result.networkPaired && capabilityStatus?.backendAccepted != false
+                        backendReadyForScan = capabilityStatus?.backendReadyForScan == true
+                        isScanStarted = false
                         pairingStatus = if (result.networkPaired) {
                             capabilityStatus?.message
                                 ?: "Phone is paired, but capability reporting did not run."
@@ -126,6 +138,8 @@ class MainActivity : Activity() {
                     }
                     is PairingResult.Failure -> {
                         isNetworkPaired = false
+                        backendReadyForScan = false
+                        isScanStarted = false
                         pairingStatus = result.message
                     }
                 }
@@ -148,19 +162,58 @@ class MainActivity : Activity() {
                 if (result.canScan) {
                     CapabilitySubmissionStatus(
                         backendAccepted = true,
+                        backendReadyForScan = result.state == "READY",
                         message = "Phone is paired. Capability report accepted; backend state is ${result.state}.",
                     )
                 } else {
                     CapabilitySubmissionStatus(
                         backendAccepted = true,
+                        backendReadyForScan = false,
                         message = "Phone is paired. Capability report accepted; backend blocked scanning in ${result.state}.",
                     )
                 }
             }
             is CapabilitySubmissionResult.Failure -> {
-                CapabilitySubmissionStatus(backendAccepted = false, message = result.message)
+                CapabilitySubmissionStatus(
+                    backendAccepted = false,
+                    backendReadyForScan = false,
+                    message = result.message,
+                )
             }
         }
+    }
+
+    private fun startBackendScan() {
+        startButton.isEnabled = false
+        pairingStatus = "Requesting backend scan start..."
+        updateCapabilityState()
+
+        val apiBaseUrl = apiBaseUrlInput.text.toString()
+        val sessionId = sessionIdInput.text.toString()
+
+        Thread {
+            val result = pairingClient.startScan(apiBaseUrl = apiBaseUrl, sessionId = sessionId)
+
+            runOnUiThread {
+                when (result) {
+                    is ScanStartResult.Success -> {
+                        isScanStarted = result.started
+                        backendReadyForScan = result.state == "READY" || result.started
+                        pairingStatus = if (result.started) {
+                            "Backend accepted scan start; session state is ${result.state}."
+                        } else {
+                            val reason = listOfNotNull(result.errorCode, result.errorMessage).joinToString(": ")
+                            "Backend blocked scan start in ${result.state}. $reason"
+                        }
+                    }
+                    is ScanStartResult.Failure -> {
+                        isScanStarted = false
+                        pairingStatus = result.message
+                    }
+                }
+                updateCapabilityState()
+            }
+        }.start()
     }
 
     private fun buildStatus(
@@ -191,6 +244,7 @@ class MainActivity : Activity() {
 
     private data class CapabilitySubmissionStatus(
         val backendAccepted: Boolean,
+        val backendReadyForScan: Boolean,
         val message: String,
     )
 }

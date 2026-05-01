@@ -184,6 +184,7 @@ class CapabilityGate(private val activity: Activity) {
         checks.firstOrNull { it.name == name }?.passed == true
 
     private fun messageFor(code: ScannerErrorCode): String = when (code) {
+        ScannerErrorCode.SESSION_NOT_READY_FOR_SCAN -> "The backend session is not ready to start scanning."
         ScannerErrorCode.DEVICE_ARCORE_UNSUPPORTED -> "ARCore is unavailable on this device."
         ScannerErrorCode.DEVICE_DEPTH_UNSUPPORTED -> "ARCore Depth is unavailable on this device."
         ScannerErrorCode.DEVICE_RAW_DEPTH_UNAVAILABLE -> "Raw depth frames are unavailable."

@@ -19,8 +19,14 @@ export function CapabilityPanel({
   lastError: ScannerError | null;
   state: ScanState;
 }) {
-  const statusClass = report?.can_scan ? "ok" : report ? "fail" : "wait";
-  const statusLabel = report?.can_scan ? "Ready to scan" : report ? "Scan blocked" : "Waiting for report";
+  const statusClass = state === "SCANNING" || report?.can_scan ? "ok" : report ? "fail" : "wait";
+  const statusLabel = state === "SCANNING"
+    ? "Scanning"
+    : report?.can_scan
+      ? "Ready to scan"
+      : report
+        ? "Scan blocked"
+        : "Waiting for report";
 
   return (
     <section className="panel">
@@ -33,6 +39,18 @@ export function CapabilityPanel({
         <p className="network-note">
           Backend state is <code translate="no">{state}</code>. Scanning remains blocked until the Android scanner pairs
           and submits a capability report.
+        </p>
+      ) : null}
+
+      {report?.can_scan && state === "READY" ? (
+        <p className="network-note">
+          Backend state is <code translate="no">READY</code>. The Android scanner can now request scan start.
+        </p>
+      ) : null}
+
+      {state === "SCANNING" ? (
+        <p className="network-note">
+          Backend state is <code translate="no">SCANNING</code>. Capture has started from a validated Android request.
         </p>
       ) : null}
 

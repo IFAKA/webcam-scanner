@@ -64,6 +64,18 @@ def submit_capabilities(session_id: UUID, report: CapabilityReport) -> SessionSn
     return snapshot
 
 
+@app.post("/sessions/{session_id}/scan/start", response_model=SessionSnapshot)
+def start_scan(session_id: UUID) -> SessionSnapshot:
+    session = store.start_scan(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    snapshot = store.snapshot(session_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return snapshot
+
+
 @app.get("/sessions/{session_id}/diagnostics", response_model=SessionSnapshot)
 def get_diagnostics(session_id: UUID) -> SessionSnapshot:
     snapshot = store.snapshot(session_id)

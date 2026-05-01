@@ -24,14 +24,18 @@ with every code change.
 - [x] Submit Android capability reports to the backend after successful pairing.
 - [x] Desktop UI polls the backend session and surfaces the submitted capability
       report.
+- [x] Keep scan capture blocked until all required capabilities pass.
+- [x] Start the scan capture flow only from a backend READY session.
 
 ## Current
 
-- [ ] Keep scan capture blocked until all required capabilities pass.
+- [ ] Stream live scan telemetry from Android to the backend.
 
 ## Next
 
-- [ ] Start the scan capture flow only from a backend READY session.
+- [ ] Persist captured scan frames and required metadata for upload.
+- [ ] Process uploaded scan data into reviewable room geometry.
+- [ ] Add desktop review controls for boundaries, dimensions, and export.
 
 ## Verification
 

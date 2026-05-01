@@ -94,6 +94,45 @@ class PairingClient {
         }
     }
 
+    fun startScan(apiBaseUrl: String, sessionId: String): ScanStartResult {
+        if (apiBaseUrl.isBlank() || sessionId.isBlank()) {
+            return ScanStartResult.Failure("Local API URL and session ID are required.")
+        }
+
+        var connection: HttpURLConnection? = null
+        return try {
+            val baseUrl = apiBaseUrl.trim().trimEnd('/')
+            val endpoint = URL("$baseUrl/sessions/${sessionId.trim()}/scan/start")
+            connection = endpoint.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 5_000
+            connection.setRequestProperty("Accept", "application/json")
+
+            val responseBody = readResponse(connection)
+            if (connection.responseCode in 200..299) {
+                val response = JSONObject(responseBody)
+                val state = response.optString("state", "UNKNOWN")
+                val error = response.optJSONObject("last_error")
+                ScanStartResult.Success(
+                    state = state,
+                    started = state == "SCANNING",
+                    errorCode = error?.optString("code"),
+                    errorMessage = error?.optString("message"),
+                    rawResponse = responseBody,
+                )
+            } else {
+                ScanStartResult.Failure(
+                    "Scan start failed with HTTP ${connection.responseCode}: $responseBody",
+                )
+            }
+        } catch (error: Exception) {
+            ScanStartResult.Failure("Scan start request failed: ${error.message ?: error.javaClass.simpleName}")
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
     private fun CapabilityReport.toServerJson(): JSONObject =
         JSONObject()
             .put("device_model", deviceModel)
@@ -127,4 +166,16 @@ sealed class PairingResult {
 sealed class CapabilitySubmissionResult {
     data class Success(val state: String, val canScan: Boolean, val rawResponse: String) : CapabilitySubmissionResult()
     data class Failure(val message: String) : CapabilitySubmissionResult()
+}
+
+sealed class ScanStartResult {
+    data class Success(
+        val state: String,
+        val started: Boolean,
+        val errorCode: String?,
+        val errorMessage: String?,
+        val rawResponse: String,
+    ) : ScanStartResult()
+
+    data class Failure(val message: String) : ScanStartResult()
 }

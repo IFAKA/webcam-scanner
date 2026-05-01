@@ -78,6 +78,38 @@ class SessionStore:
         session.state = ScanState.READY if evaluated.can_scan else ScanState.FAILED
         return session
 
+    def start_scan(self, session_id: UUID) -> SessionRecord | None:
+        session = self.get(session_id)
+        if session is None:
+            return None
+
+        if session.state == ScanState.SCANNING:
+            return session
+
+        if (
+            session.state == ScanState.READY
+            and session.network_paired
+            and session.capability_report is not None
+            and session.capability_report.can_scan
+        ):
+            session.state = ScanState.SCANNING
+            session.last_error = None
+            return session
+
+        session.last_error = make_error(
+            ScannerErrorCode.SESSION_NOT_READY_FOR_SCAN,
+            stage="scan_start",
+            recoverable=True,
+            session_id=session_id,
+            details={
+                "state": session.state,
+                "network_paired": session.network_paired,
+                "capability_report_received": session.capability_report is not None,
+                "can_scan": session.capability_report.can_scan if session.capability_report else False,
+            },
+        )
+        return session
+
 
 def evaluate_capabilities(session_id: UUID, report: CapabilityReport) -> CapabilityReport:
     checks = [

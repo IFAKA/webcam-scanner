@@ -21,6 +21,7 @@ class ScanState(StrEnum):
 
 
 class ScannerErrorCode(StrEnum):
+    SESSION_NOT_READY_FOR_SCAN = "SESSION_NOT_READY_FOR_SCAN"
     DEVICE_ARCORE_UNSUPPORTED = "DEVICE_ARCORE_UNSUPPORTED"
     DEVICE_DEPTH_UNSUPPORTED = "DEVICE_DEPTH_UNSUPPORTED"
     DEVICE_RAW_DEPTH_UNAVAILABLE = "DEVICE_RAW_DEPTH_UNAVAILABLE"
@@ -38,6 +39,7 @@ class ScannerErrorCode(StrEnum):
 
 
 ERROR_MESSAGES: dict[ScannerErrorCode, str] = {
+    ScannerErrorCode.SESSION_NOT_READY_FOR_SCAN: "The scan cannot start until the backend session is READY.",
     ScannerErrorCode.DEVICE_ARCORE_UNSUPPORTED: "This device cannot scan because ARCore is unavailable.",
     ScannerErrorCode.DEVICE_DEPTH_UNSUPPORTED: "This device cannot scan because ARCore Depth is unavailable.",
     ScannerErrorCode.DEVICE_RAW_DEPTH_UNAVAILABLE: "This device cannot scan because raw depth frames are unavailable.",
