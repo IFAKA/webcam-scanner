@@ -26,6 +26,15 @@ class MainActivity : Activity() {
         updateCapabilityState()
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        updateCapabilityState()
+    }
+
     private fun render() {
         status = TextView(this).apply {
             textSize = 16f
@@ -48,9 +57,35 @@ class MainActivity : Activity() {
         val (report, error) = gate.evaluate(isNetworkPaired = false)
         startButton.isEnabled = report.canScan
         status.text = if (error == null) {
-            "READY\n${report.deviceModel}\nAll required scanner capabilities passed."
+            buildStatus("READY", report, "All required scanner capabilities passed.")
         } else {
-            "SCAN BLOCKED\n${error.code}\n${error.message}"
+            buildStatus("SCAN BLOCKED", report, "${error.code}\n${error.message}")
         }
+    }
+
+    private fun buildStatus(
+        headline: String,
+        report: CapabilityReport,
+        message: String,
+    ): String {
+        val identity = report.deviceIdentity
+        val checks = report.checks.joinToString(separator = "\n") { check ->
+            val marker = if (check.passed) "PASS" else "BLOCKED"
+            "$marker ${check.name}: ${check.message}"
+        }
+
+        return """
+            $headline
+            $message
+
+            Expected scanner: Redmi Note 14 5G
+            Observed device: ${identity.displayName}
+            Brand: ${identity.brand}
+            Device: ${identity.device}
+            Product: ${identity.product}
+            Android SDK: ${identity.androidSdk}
+
+            $checks
+        """.trimIndent()
     }
 }

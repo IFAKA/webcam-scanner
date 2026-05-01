@@ -24,8 +24,29 @@ data class ScannerError(
     val recoverable: Boolean,
 )
 
+data class DeviceIdentity(
+    val manufacturer: String,
+    val brand: String,
+    val model: String,
+    val device: String,
+    val product: String,
+    val androidSdk: Int,
+) {
+    val displayName: String
+        get() = listOf(manufacturer, model)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+}
+
+data class CapabilityCheck(
+    val name: String,
+    val passed: Boolean,
+    val message: String,
+)
+
 data class CapabilityReport(
     val deviceModel: String,
+    val deviceIdentity: DeviceIdentity,
     val arcoreSupported: Boolean,
     val depthSupported: Boolean,
     val rawDepthAvailable: Boolean,
@@ -33,6 +54,7 @@ data class CapabilityReport(
     val trackingAvailable: Boolean,
     val cameraPermission: Boolean,
     val networkPaired: Boolean,
+    val checks: List<CapabilityCheck>,
 ) {
     val canScan: Boolean
         get() = arcoreSupported &&
