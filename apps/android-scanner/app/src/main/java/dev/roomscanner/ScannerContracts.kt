@@ -2,6 +2,7 @@ package dev.roomscanner
 
 enum class ScannerErrorCode {
     SESSION_NOT_READY_FOR_SCAN,
+    SESSION_NOT_SCANNING_FOR_TELEMETRY,
     DEVICE_ARCORE_UNSUPPORTED,
     DEVICE_DEPTH_UNSUPPORTED,
     DEVICE_RAW_DEPTH_UNAVAILABLE,
@@ -66,3 +67,13 @@ data class CapabilityReport(
             cameraPermission &&
             networkPaired
 }
+
+data class ScanTelemetrySample(
+    val frameIndex: Int,
+    val trackingState: String,
+    val monotonicTimestampMs: Long,
+    val cameraPositionM: FloatArray? = null,
+    val cameraRotationQuaternion: FloatArray? = null,
+    val depthFrameAvailable: Boolean,
+    val confidenceFrameAvailable: Boolean,
+)

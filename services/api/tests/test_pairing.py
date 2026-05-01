@@ -26,6 +26,20 @@ def capability_payload(**overrides):
     return values
 
 
+def telemetry_payload(**overrides):
+    values = {
+        "frame_index": 0,
+        "tracking_state": "APP_HEARTBEAT",
+        "monotonic_timestamp_ms": 1000,
+        "camera_position_m": None,
+        "camera_rotation_quaternion": None,
+        "depth_frame_available": False,
+        "confidence_frame_available": False,
+    }
+    values.update(overrides)
+    return values
+
+
 def test_valid_pairing_moves_session_to_device_checking():
     api = client()
     created = api.post("/sessions").json()
@@ -150,3 +164,56 @@ def test_scan_start_moves_ready_session_to_scanning():
     assert snapshot["network_paired"] is True
     assert snapshot["capability_report"]["can_scan"] is True
     assert snapshot["last_error"] is None
+
+
+def test_telemetry_is_blocked_until_session_is_scanning():
+    api = client()
+    created = api.post("/sessions").json()
+
+    response = api.post(
+        f"/sessions/{created['session_id']}/telemetry",
+        json=telemetry_payload(),
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["state"] == "CREATED"
+    assert snapshot["telemetry"]["frame_count"] == 0
+    assert snapshot["telemetry"]["latest_sample"] is None
+    assert snapshot["last_error"]["code"] == ScannerErrorCode.SESSION_NOT_SCANNING_FOR_TELEMETRY
+    assert snapshot["last_error"]["stage"] == "telemetry"
+    assert snapshot["last_error"]["recoverable"] is True
+    assert snapshot["last_error"]["details"]["frame_index"] == 0
+
+
+def test_scanning_session_accepts_live_telemetry():
+    api = client()
+    created = api.post("/sessions").json()
+    api.post(
+        f"/sessions/{created['session_id']}/pair",
+        json={"pairing_token": created["pairing_token"]},
+    )
+    api.post(
+        f"/sessions/{created['session_id']}/capabilities",
+        json=capability_payload(network_paired=False, can_scan=False),
+    )
+    api.post(f"/sessions/{created['session_id']}/scan/start")
+
+    first = api.post(
+        f"/sessions/{created['session_id']}/telemetry",
+        json=telemetry_payload(frame_index=7, monotonic_timestamp_ms=7000),
+    )
+    second = api.post(
+        f"/sessions/{created['session_id']}/telemetry",
+        json=telemetry_payload(frame_index=8, monotonic_timestamp_ms=8000),
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    snapshot = second.json()
+    assert snapshot["state"] == "SCANNING"
+    assert snapshot["last_error"] is None
+    assert snapshot["telemetry"]["frame_count"] == 2
+    assert snapshot["telemetry"]["latest_received_at"] is not None
+    assert snapshot["telemetry"]["latest_sample"]["frame_index"] == 8
+    assert snapshot["telemetry"]["latest_sample"]["tracking_state"] == "APP_HEARTBEAT"

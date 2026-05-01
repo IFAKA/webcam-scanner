@@ -22,6 +22,7 @@ class ScanState(StrEnum):
 
 class ScannerErrorCode(StrEnum):
     SESSION_NOT_READY_FOR_SCAN = "SESSION_NOT_READY_FOR_SCAN"
+    SESSION_NOT_SCANNING_FOR_TELEMETRY = "SESSION_NOT_SCANNING_FOR_TELEMETRY"
     DEVICE_ARCORE_UNSUPPORTED = "DEVICE_ARCORE_UNSUPPORTED"
     DEVICE_DEPTH_UNSUPPORTED = "DEVICE_DEPTH_UNSUPPORTED"
     DEVICE_RAW_DEPTH_UNAVAILABLE = "DEVICE_RAW_DEPTH_UNAVAILABLE"
@@ -40,6 +41,7 @@ class ScannerErrorCode(StrEnum):
 
 ERROR_MESSAGES: dict[ScannerErrorCode, str] = {
     ScannerErrorCode.SESSION_NOT_READY_FOR_SCAN: "The scan cannot start until the backend session is READY.",
+    ScannerErrorCode.SESSION_NOT_SCANNING_FOR_TELEMETRY: "Telemetry is blocked until the backend session is SCANNING.",
     ScannerErrorCode.DEVICE_ARCORE_UNSUPPORTED: "This device cannot scan because ARCore is unavailable.",
     ScannerErrorCode.DEVICE_DEPTH_UNSUPPORTED: "This device cannot scan because ARCore Depth is unavailable.",
     ScannerErrorCode.DEVICE_RAW_DEPTH_UNAVAILABLE: "This device cannot scan because raw depth frames are unavailable.",
@@ -101,6 +103,22 @@ class PairSessionRequest(BaseModel):
     pairing_token: str
 
 
+class ScanTelemetrySample(BaseModel):
+    frame_index: int = Field(ge=0)
+    tracking_state: str = Field(min_length=1)
+    monotonic_timestamp_ms: int = Field(ge=0)
+    camera_position_m: tuple[float, float, float] | None = None
+    camera_rotation_quaternion: tuple[float, float, float, float] | None = None
+    depth_frame_available: bool
+    confidence_frame_available: bool
+
+
+class TelemetrySummary(BaseModel):
+    frame_count: int = 0
+    latest_sample: ScanTelemetrySample | None = None
+    latest_received_at: datetime | None = None
+
+
 class SessionSnapshot(BaseModel):
     session_id: UUID
     state: ScanState
@@ -108,3 +126,4 @@ class SessionSnapshot(BaseModel):
     capability_report: CapabilityReport | None = None
     network_paired: bool = False
     network_config: LocalNetworkConfig | None = None
+    telemetry: TelemetrySummary = Field(default_factory=TelemetrySummary)

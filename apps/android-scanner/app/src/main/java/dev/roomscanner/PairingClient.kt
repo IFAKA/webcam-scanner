@@ -133,6 +133,56 @@ class PairingClient {
         }
     }
 
+    fun submitTelemetry(
+        apiBaseUrl: String,
+        sessionId: String,
+        sample: ScanTelemetrySample,
+    ): TelemetrySubmissionResult {
+        if (apiBaseUrl.isBlank() || sessionId.isBlank()) {
+            return TelemetrySubmissionResult.Failure("Local API URL and session ID are required.")
+        }
+
+        var connection: HttpURLConnection? = null
+        return try {
+            val baseUrl = apiBaseUrl.trim().trimEnd('/')
+            val endpoint = URL("$baseUrl/sessions/${sessionId.trim()}/telemetry")
+            connection = endpoint.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 5_000
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Accept", "application/json")
+            connection.doOutput = true
+
+            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
+                writer.write(sample.toServerJson().toString())
+            }
+
+            val responseBody = readResponse(connection)
+            if (connection.responseCode in 200..299) {
+                val response = JSONObject(responseBody)
+                val telemetry = response.optJSONObject("telemetry")
+                val error = response.optJSONObject("last_error")
+                TelemetrySubmissionResult.Success(
+                    state = response.optString("state", "UNKNOWN"),
+                    frameCount = telemetry?.optInt("frame_count", 0) ?: 0,
+                    accepted = error == null,
+                    errorCode = error?.optString("code"),
+                    errorMessage = error?.optString("message"),
+                    rawResponse = responseBody,
+                )
+            } else {
+                TelemetrySubmissionResult.Failure(
+                    "Telemetry failed with HTTP ${connection.responseCode}: $responseBody",
+                )
+            }
+        } catch (error: Exception) {
+            TelemetrySubmissionResult.Failure("Telemetry request failed: ${error.message ?: error.javaClass.simpleName}")
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
     private fun CapabilityReport.toServerJson(): JSONObject =
         JSONObject()
             .put("device_model", deviceModel)
@@ -144,6 +194,22 @@ class PairingClient {
             .put("camera_permission", cameraPermission)
             .put("network_paired", networkPaired)
             .put("can_scan", canScan)
+
+    private fun ScanTelemetrySample.toServerJson(): JSONObject =
+        JSONObject()
+            .put("frame_index", frameIndex)
+            .put("tracking_state", trackingState)
+            .put("monotonic_timestamp_ms", monotonicTimestampMs)
+            .put("camera_position_m", cameraPositionM?.toJsonArray() ?: JSONObject.NULL)
+            .put("camera_rotation_quaternion", cameraRotationQuaternion?.toJsonArray() ?: JSONObject.NULL)
+            .put("depth_frame_available", depthFrameAvailable)
+            .put("confidence_frame_available", confidenceFrameAvailable)
+
+    private fun FloatArray.toJsonArray(): org.json.JSONArray {
+        val array = org.json.JSONArray()
+        forEach { array.put(it.toDouble()) }
+        return array
+    }
 
     private fun readResponse(connection: HttpURLConnection): String {
         val stream = if (connection.responseCode in 200..299) {
@@ -178,4 +244,17 @@ sealed class ScanStartResult {
     ) : ScanStartResult()
 
     data class Failure(val message: String) : ScanStartResult()
+}
+
+sealed class TelemetrySubmissionResult {
+    data class Success(
+        val state: String,
+        val frameCount: Int,
+        val accepted: Boolean,
+        val errorCode: String?,
+        val errorMessage: String?,
+        val rawResponse: String,
+    ) : TelemetrySubmissionResult()
+
+    data class Failure(val message: String) : TelemetrySubmissionResult()
 }

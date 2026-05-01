@@ -1,8 +1,18 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from secrets import token_urlsafe
 from uuid import UUID, uuid4
 
-from .contracts import CapabilityReport, LocalNetworkConfig, ScanState, ScannerError, ScannerErrorCode, SessionSnapshot
+from .contracts import (
+    CapabilityReport,
+    LocalNetworkConfig,
+    ScanState,
+    ScanTelemetrySample,
+    ScannerError,
+    ScannerErrorCode,
+    SessionSnapshot,
+    TelemetrySummary,
+)
 from .errors import make_error
 
 
@@ -15,6 +25,7 @@ class SessionRecord:
     network_paired: bool = False
     capability_report: CapabilityReport | None = None
     last_error: ScannerError | None = None
+    telemetry: TelemetrySummary = field(default_factory=TelemetrySummary)
 
 
 class SessionStore:
@@ -45,6 +56,7 @@ class SessionStore:
             capability_report=session.capability_report,
             network_paired=session.network_paired,
             network_config=session.network_config,
+            telemetry=session.telemetry,
         )
 
     def pair(self, session_id: UUID, pairing_token: str) -> SessionRecord | None:
@@ -108,6 +120,32 @@ class SessionStore:
                 "can_scan": session.capability_report.can_scan if session.capability_report else False,
             },
         )
+        return session
+
+    def record_telemetry(self, session_id: UUID, sample: ScanTelemetrySample) -> SessionRecord | None:
+        session = self.get(session_id)
+        if session is None:
+            return None
+
+        if session.state != ScanState.SCANNING:
+            session.last_error = make_error(
+                ScannerErrorCode.SESSION_NOT_SCANNING_FOR_TELEMETRY,
+                stage="telemetry",
+                recoverable=True,
+                session_id=session_id,
+                details={
+                    "state": session.state,
+                    "frame_index": sample.frame_index,
+                },
+            )
+            return session
+
+        session.telemetry = TelemetrySummary(
+            frame_count=session.telemetry.frame_count + 1,
+            latest_sample=sample,
+            latest_received_at=datetime.now(UTC),
+        )
+        session.last_error = None
         return session
 
 

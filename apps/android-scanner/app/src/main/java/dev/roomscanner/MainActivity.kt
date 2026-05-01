@@ -3,6 +3,7 @@ package dev.roomscanner
 import android.Manifest
 import android.app.Activity
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
@@ -22,6 +23,9 @@ class MainActivity : Activity() {
     private var isNetworkPaired = false
     private var backendReadyForScan = false
     private var isScanStarted = false
+    private var telemetryFrameIndex = 0
+    @Volatile private var isTelemetryStreaming = false
+    private var telemetryThread: Thread? = null
     private var pairingStatus = "Pair with the local laptop server before scanning."
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,6 +33,11 @@ class MainActivity : Activity() {
         gate = CapabilityGate(this)
         render()
         ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 10)
+    }
+
+    override fun onDestroy() {
+        stopTelemetryStream()
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -103,6 +112,7 @@ class MainActivity : Activity() {
     }
 
     private fun pairWithLaptop() {
+        stopTelemetryStream()
         pairButton.isEnabled = false
         pairingStatus = "Pairing with local laptop server..."
         updateCapabilityState()
@@ -129,6 +139,7 @@ class MainActivity : Activity() {
                         isNetworkPaired = result.networkPaired && capabilityStatus?.backendAccepted != false
                         backendReadyForScan = capabilityStatus?.backendReadyForScan == true
                         isScanStarted = false
+                        telemetryFrameIndex = 0
                         pairingStatus = if (result.networkPaired) {
                             capabilityStatus?.message
                                 ?: "Phone is paired, but capability reporting did not run."
@@ -140,6 +151,7 @@ class MainActivity : Activity() {
                         isNetworkPaired = false
                         backendReadyForScan = false
                         isScanStarted = false
+                        telemetryFrameIndex = 0
                         pairingStatus = result.message
                     }
                 }
@@ -200,20 +212,91 @@ class MainActivity : Activity() {
                         isScanStarted = result.started
                         backendReadyForScan = result.state == "READY" || result.started
                         pairingStatus = if (result.started) {
-                            "Backend accepted scan start; session state is ${result.state}."
+                            startTelemetryStream(apiBaseUrl, sessionId)
+                            "Backend accepted scan start; live telemetry stream is starting."
                         } else {
+                            stopTelemetryStream()
                             val reason = listOfNotNull(result.errorCode, result.errorMessage).joinToString(": ")
                             "Backend blocked scan start in ${result.state}. $reason"
                         }
                     }
                     is ScanStartResult.Failure -> {
                         isScanStarted = false
+                        stopTelemetryStream()
                         pairingStatus = result.message
                     }
                 }
                 updateCapabilityState()
             }
         }.start()
+    }
+
+    private fun startTelemetryStream(apiBaseUrl: String, sessionId: String) {
+        stopTelemetryStream()
+        telemetryFrameIndex = 0
+        isTelemetryStreaming = true
+        telemetryThread = Thread {
+            while (isTelemetryStreaming) {
+                val sample = buildTelemetrySample()
+                when (
+                    val result = pairingClient.submitTelemetry(
+                        apiBaseUrl = apiBaseUrl,
+                        sessionId = sessionId,
+                        sample = sample,
+                    )
+                ) {
+                    is TelemetrySubmissionResult.Success -> {
+                        runOnUiThread {
+                            if (result.accepted && result.state == "SCANNING") {
+                                pairingStatus = "Live telemetry streaming. Backend received ${result.frameCount} samples."
+                                isScanStarted = true
+                            } else {
+                                val reason = listOfNotNull(result.errorCode, result.errorMessage).joinToString(": ")
+                                pairingStatus = "Backend blocked telemetry in ${result.state}. $reason"
+                                isScanStarted = false
+                                backendReadyForScan = result.state == "READY"
+                                stopTelemetryStream()
+                            }
+                            updateCapabilityState()
+                        }
+                    }
+                    is TelemetrySubmissionResult.Failure -> {
+                        runOnUiThread {
+                            pairingStatus = result.message
+                            isScanStarted = false
+                            stopTelemetryStream()
+                            updateCapabilityState()
+                        }
+                    }
+                }
+
+                try {
+                    Thread.sleep(1_000)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+            }
+        }
+        telemetryThread?.start()
+    }
+
+    private fun stopTelemetryStream() {
+        isTelemetryStreaming = false
+        telemetryThread?.interrupt()
+        telemetryThread = null
+    }
+
+    private fun buildTelemetrySample(): ScanTelemetrySample {
+        val (report, _) = gate.evaluate(isNetworkPaired = isNetworkPaired)
+        val frameIndex = telemetryFrameIndex
+        telemetryFrameIndex += 1
+        return ScanTelemetrySample(
+            frameIndex = frameIndex,
+            trackingState = "APP_HEARTBEAT",
+            monotonicTimestampMs = SystemClock.elapsedRealtime(),
+            depthFrameAvailable = report.depthSupported && report.rawDepthAvailable,
+            confidenceFrameAvailable = report.confidenceAvailable,
+        )
     }
 
     private fun buildStatus(

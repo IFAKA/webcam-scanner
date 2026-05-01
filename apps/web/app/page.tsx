@@ -2,6 +2,7 @@ import { CapabilityPanel } from "../components/capability-panel";
 import { DiagnosticsPanel } from "../components/diagnostics-panel";
 import { PairingPanel } from "../components/pairing-panel";
 import { SessionMonitor } from "../components/session-monitor";
+import { TelemetryPanel } from "../components/telemetry-panel";
 import { apiBaseUrl, createSession } from "../lib/api";
 import type { SessionSnapshot } from "../lib/contracts";
 
@@ -17,6 +18,11 @@ export default async function Home() {
     capability_report: null,
     network_paired: false,
     network_config: createdSession?.network_config ?? null,
+    telemetry: {
+      frame_count: 0,
+      latest_sample: null,
+      latest_received_at: null,
+    },
   };
 
   return (
@@ -45,6 +51,7 @@ export default async function Home() {
             ) : (
               <>
                 <CapabilityPanel report={session.capability_report} lastError={session.last_error} state={session.state} />
+                <TelemetryPanel state={session.state} telemetry={session.telemetry} />
                 <DiagnosticsPanel session={session} />
               </>
             )}

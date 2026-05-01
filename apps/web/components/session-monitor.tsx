@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CapabilityPanel } from "./capability-panel";
 import { DiagnosticsPanel } from "./diagnostics-panel";
+import { TelemetryPanel } from "./telemetry-panel";
 import type { SessionSnapshot } from "../lib/contracts";
 
 const POLL_INTERVAL_MS = 2_000;
@@ -57,13 +58,16 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
       return `Session refresh blocked: ${pollError}`;
     }
     if (session.state === "SCANNING") {
-      return "Backend accepted scan start. Session is SCANNING.";
+      if (session.telemetry.frame_count > 0) {
+        return `Backend accepted scan start. Live telemetry received ${session.telemetry.frame_count} samples.`;
+      }
+      return "Backend accepted scan start. Waiting for Android telemetry.";
     }
     if (session.capability_report) {
       return `Session ${session.state}. Capability report received.`;
     }
     return "Waiting for Android capability report.";
-  }, [pollError, session.capability_report, session.state]);
+  }, [pollError, session.capability_report, session.state, session.telemetry.frame_count]);
 
   return (
     <>
@@ -71,6 +75,7 @@ export function SessionMonitor({ initialSession }: { initialSession: SessionSnap
         {liveMessage}
       </p>
       <CapabilityPanel report={session.capability_report} lastError={session.last_error} state={session.state} />
+      <TelemetryPanel state={session.state} telemetry={session.telemetry} />
       <DiagnosticsPanel session={session} />
     </>
   );
