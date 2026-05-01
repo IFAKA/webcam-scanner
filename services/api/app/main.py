@@ -1,0 +1,54 @@
+from uuid import UUID
+
+from fastapi import FastAPI, HTTPException
+
+from .contracts import CapabilityReport, CreateSessionResponse, SessionSnapshot
+from .sessions import SessionStore, evaluate_capabilities
+
+app = FastAPI(title="Room Boundary Scanner API", version="0.1.0")
+store = SessionStore()
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.post("/sessions", response_model=CreateSessionResponse)
+def create_session() -> CreateSessionResponse:
+    session = store.create()
+    return CreateSessionResponse(
+        session_id=session.session_id,
+        pairing_token=session.pairing_token,
+        state=session.state,
+        websocket_path=f"/sessions/{session.session_id}/telemetry",
+    )
+
+
+@app.get("/sessions/{session_id}", response_model=SessionSnapshot)
+def get_session(session_id: UUID) -> SessionSnapshot:
+    snapshot = store.snapshot(session_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return snapshot
+
+
+@app.post("/sessions/{session_id}/capabilities", response_model=SessionSnapshot)
+def submit_capabilities(session_id: UUID, report: CapabilityReport) -> SessionSnapshot:
+    evaluated = evaluate_capabilities(session_id, report)
+    session = store.save_capabilities(session_id, evaluated)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    snapshot = store.snapshot(session_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return snapshot
+
+
+@app.get("/sessions/{session_id}/diagnostics", response_model=SessionSnapshot)
+def get_diagnostics(session_id: UUID) -> SessionSnapshot:
+    snapshot = store.snapshot(session_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return snapshot
