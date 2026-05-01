@@ -1,4 +1,4 @@
-import type { CapabilityReport, ScannerError } from "../lib/contracts";
+import type { CapabilityReport, ScannerError, ScanState } from "../lib/contracts";
 
 const checks: Array<[keyof CapabilityReport, string]> = [
   ["camera_permission", "Camera permission"],
@@ -13,26 +13,37 @@ const checks: Array<[keyof CapabilityReport, string]> = [
 export function CapabilityPanel({
   report,
   lastError,
+  state,
 }: {
   report: CapabilityReport | null;
   lastError: ScannerError | null;
+  state: ScanState;
 }) {
+  const statusClass = report?.can_scan ? "ok" : report ? "fail" : "wait";
+  const statusLabel = report?.can_scan ? "Ready to scan" : report ? "Scan blocked" : "Waiting for report";
+
   return (
     <section className="panel">
       <div className="panel-heading">
         <h2>Device Gate</h2>
-        <span className={`status ${report?.can_scan ? "ok" : "fail"}`}>
-          {report?.can_scan ? "Ready to scan" : "Scan blocked"}
-        </span>
+        <span className={`status ${statusClass}`}>{statusLabel}</span>
       </div>
+
+      {!report ? (
+        <p className="network-note">
+          Backend state is <code translate="no">{state}</code>. Scanning remains blocked until the Android scanner pairs
+          and submits a capability report.
+        </p>
+      ) : null}
 
       <div className="checklist">
         {checks.map(([key, label]) => {
+          const isKnown = report !== null;
           const isPassing = Boolean(report?.[key]);
           return (
             <div className="check" key={key}>
               <span>{label}</span>
-              <strong>{isPassing ? "PASS" : "FAIL"}</strong>
+              <strong>{isKnown ? (isPassing ? "PASS" : "FAIL") : "PENDING"}</strong>
             </div>
           );
         })}

@@ -1,6 +1,7 @@
 import { CapabilityPanel } from "../components/capability-panel";
 import { DiagnosticsPanel } from "../components/diagnostics-panel";
 import { PairingPanel } from "../components/pairing-panel";
+import { SessionMonitor } from "../components/session-monitor";
 import { apiBaseUrl, createSession } from "../lib/api";
 import type { SessionSnapshot } from "../lib/contracts";
 
@@ -39,8 +40,14 @@ export default async function Home() {
             ) : (
               <ApiUnavailablePanel apiUrl={apiUrl} />
             )}
-            <CapabilityPanel report={session.capability_report} lastError={session.last_error} />
-            <DiagnosticsPanel session={session} />
+            {createdSession ? (
+              <SessionMonitor initialSession={session} />
+            ) : (
+              <>
+                <CapabilityPanel report={session.capability_report} lastError={session.last_error} state={session.state} />
+                <DiagnosticsPanel session={session} />
+              </>
+            )}
           </div>
 
           <section className="panel">

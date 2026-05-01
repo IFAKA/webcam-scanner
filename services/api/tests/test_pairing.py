@@ -91,3 +91,25 @@ def test_capabilities_cannot_self_assert_network_pairing():
     assert snapshot["network_paired"] is False
     assert snapshot["capability_report"]["network_paired"] is False
     assert snapshot["last_error"]["code"] == ScannerErrorCode.NETWORK_PAIRING_FAILED
+
+
+def test_paired_capability_report_marks_session_ready():
+    api = client()
+    created = api.post("/sessions").json()
+    api.post(
+        f"/sessions/{created['session_id']}/pair",
+        json={"pairing_token": created["pairing_token"]},
+    )
+
+    response = api.post(
+        f"/sessions/{created['session_id']}/capabilities",
+        json=capability_payload(network_paired=False, can_scan=False),
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["state"] == "READY"
+    assert snapshot["network_paired"] is True
+    assert snapshot["capability_report"]["network_paired"] is True
+    assert snapshot["capability_report"]["can_scan"] is True
+    assert snapshot["last_error"] is None

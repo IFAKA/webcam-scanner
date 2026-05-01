@@ -21,14 +21,17 @@ with every code change.
 - [x] Desktop UI creates a backend session and displays pairing values for the
       Android scanner.
 - [x] Add local network configuration for phone-to-laptop API discovery.
+- [x] Submit Android capability reports to the backend after successful pairing.
+- [x] Desktop UI polls the backend session and surfaces the submitted capability
+      report.
 
 ## Current
 
-- [ ] Submit Android capability reports to the backend after successful pairing.
+- [ ] Keep scan capture blocked until all required capabilities pass.
 
 ## Next
 
-- [ ] Keep scan capture blocked until all required capabilities pass.
+- [ ] Start the scan capture flow only from a backend READY session.
 
 ## Verification
 

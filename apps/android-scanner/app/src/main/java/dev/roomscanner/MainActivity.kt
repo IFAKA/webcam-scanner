@@ -107,13 +107,19 @@ class MainActivity : Activity() {
                 sessionId = sessionId,
                 pairingToken = pairingToken,
             )
+            val capabilityStatus = if (result is PairingResult.Success && result.networkPaired) {
+                submitCapabilityReport(apiBaseUrl, sessionId)
+            } else {
+                null
+            }
 
             runOnUiThread {
                 when (result) {
                     is PairingResult.Success -> {
-                        isNetworkPaired = result.networkPaired
+                        isNetworkPaired = result.networkPaired && capabilityStatus?.backendAccepted != false
                         pairingStatus = if (result.networkPaired) {
-                            "Phone is paired with the local laptop server."
+                            capabilityStatus?.message
+                                ?: "Phone is paired, but capability reporting did not run."
                         } else {
                             "Pairing endpoint responded, but backend did not mark this session paired."
                         }
@@ -127,6 +133,34 @@ class MainActivity : Activity() {
                 updateCapabilityState()
             }
         }.start()
+    }
+
+    private fun submitCapabilityReport(apiBaseUrl: String, sessionId: String): CapabilitySubmissionStatus {
+        val (report, _) = gate.evaluate(isNetworkPaired = true)
+        return when (
+            val result = pairingClient.submitCapabilities(
+                apiBaseUrl = apiBaseUrl,
+                sessionId = sessionId,
+                report = report,
+            )
+        ) {
+            is CapabilitySubmissionResult.Success -> {
+                if (result.canScan) {
+                    CapabilitySubmissionStatus(
+                        backendAccepted = true,
+                        message = "Phone is paired. Capability report accepted; backend state is ${result.state}.",
+                    )
+                } else {
+                    CapabilitySubmissionStatus(
+                        backendAccepted = true,
+                        message = "Phone is paired. Capability report accepted; backend blocked scanning in ${result.state}.",
+                    )
+                }
+            }
+            is CapabilitySubmissionResult.Failure -> {
+                CapabilitySubmissionStatus(backendAccepted = false, message = result.message)
+            }
+        }
     }
 
     private fun buildStatus(
@@ -154,4 +188,9 @@ class MainActivity : Activity() {
             $checks
         """.trimIndent()
     }
+
+    private data class CapabilitySubmissionStatus(
+        val backendAccepted: Boolean,
+        val message: String,
+    )
 }

@@ -1,4 +1,4 @@
-import type { CreateSessionResponse } from "./contracts";
+import type { CreateSessionResponse, SessionSnapshot } from "./contracts";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
@@ -20,4 +20,20 @@ export async function createSession(): Promise<CreateSessionResponse> {
   }
 
   return response.json() as Promise<CreateSessionResponse>;
+}
+
+export async function getSession(sessionId: string): Promise<SessionSnapshot> {
+  const response = await fetch(`${apiBaseUrl()}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Session fetch failed with HTTP ${response.status}`);
+  }
+
+  return response.json() as Promise<SessionSnapshot>;
 }
