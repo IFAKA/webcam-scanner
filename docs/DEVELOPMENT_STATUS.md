@@ -16,10 +16,11 @@ with every code change.
 - [x] Server-owned local pairing token validation.
 - [x] Capability submission uses backend pairing state instead of trusting the
       phone-reported network flag.
+- [x] Android scanner can pair with the local FastAPI endpoint using a
+      desktop-provided API URL, session ID, and pairing token.
 
 ## Current
 
-- [ ] Wire the Android scanner to the local FastAPI pairing endpoint.
 - [ ] Display real backend-created session and pairing information in the
       desktop UI.
 

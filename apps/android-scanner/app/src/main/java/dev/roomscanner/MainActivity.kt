@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
@@ -12,7 +13,14 @@ import androidx.core.app.ActivityCompat
 class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var startButton: Button
+    private lateinit var pairButton: Button
+    private lateinit var apiBaseUrlInput: EditText
+    private lateinit var sessionIdInput: EditText
+    private lateinit var pairingTokenInput: EditText
     private lateinit var gate: CapabilityGate
+    private val pairingClient = PairingClient()
+    private var isNetworkPaired = false
+    private var pairingStatus = "Pair with the local laptop server before scanning."
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,6 +48,22 @@ class MainActivity : Activity() {
             textSize = 16f
             setPadding(32, 32, 32, 16)
         }
+        apiBaseUrlInput = EditText(this).apply {
+            hint = "Local API URL, e.g. http://192.168.1.20:8000"
+            setSingleLine(true)
+        }
+        sessionIdInput = EditText(this).apply {
+            hint = "Session ID from desktop"
+            setSingleLine(true)
+        }
+        pairingTokenInput = EditText(this).apply {
+            hint = "Pairing token from desktop"
+            setSingleLine(true)
+        }
+        pairButton = Button(this).apply {
+            text = "Pair Laptop"
+            setOnClickListener { pairWithLaptop() }
+        }
         startButton = Button(this).apply {
             text = "Start Scan"
             isEnabled = false
@@ -47,20 +71,62 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(32, 32, 32, 32)
             addView(status)
+            addView(apiBaseUrlInput)
+            addView(sessionIdInput)
+            addView(pairingTokenInput)
+            addView(pairButton)
             addView(startButton)
         }
         setContentView(root)
     }
 
     private fun updateCapabilityState() {
-        val (report, error) = gate.evaluate(isNetworkPaired = false)
+        val (report, error) = gate.evaluate(isNetworkPaired = isNetworkPaired)
         startButton.isEnabled = report.canScan
         status.text = if (error == null) {
-            buildStatus("READY", report, "All required scanner capabilities passed.")
+            buildStatus("READY", report, pairingStatus)
         } else {
-            buildStatus("SCAN BLOCKED", report, "${error.code}\n${error.message}")
+            buildStatus("SCAN BLOCKED", report, "${error.code}\n${error.message}\n$pairingStatus")
         }
+    }
+
+    private fun pairWithLaptop() {
+        pairButton.isEnabled = false
+        pairingStatus = "Pairing with local laptop server..."
+        updateCapabilityState()
+
+        val apiBaseUrl = apiBaseUrlInput.text.toString()
+        val sessionId = sessionIdInput.text.toString()
+        val pairingToken = pairingTokenInput.text.toString()
+
+        Thread {
+            val result = pairingClient.pair(
+                apiBaseUrl = apiBaseUrl,
+                sessionId = sessionId,
+                pairingToken = pairingToken,
+            )
+
+            runOnUiThread {
+                when (result) {
+                    is PairingResult.Success -> {
+                        isNetworkPaired = result.networkPaired
+                        pairingStatus = if (result.networkPaired) {
+                            "Phone is paired with the local laptop server."
+                        } else {
+                            "Pairing endpoint responded, but backend did not mark this session paired."
+                        }
+                    }
+                    is PairingResult.Failure -> {
+                        isNetworkPaired = false
+                        pairingStatus = result.message
+                    }
+                }
+                pairButton.isEnabled = true
+                updateCapabilityState()
+            }
+        }.start()
     }
 
     private fun buildStatus(
