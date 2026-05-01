@@ -41,6 +41,23 @@ The local API owns pairing state. Phones submit the session token from the
 desktop UI, and the backend records whether the local pairing requirement is
 satisfied before capability reports can enable scanning.
 
+Session creation includes the phone-facing local network configuration. The
+desktop UI must show `network_config.api_base_url` for Android pairing because
+server-side UI requests may use `127.0.0.1`, which is not reachable from the
+phone. Set `ROOM_SCANNER_PUBLIC_API_URL` when automatic LAN detection advertises
+a loopback address or the wrong interface.
+
+```json
+{
+  "api_base_url": "http://192.168.1.20:8000",
+  "websocket_base_url": "ws://192.168.1.20:8000",
+  "host": "192.168.1.20",
+  "port": 8000,
+  "detected_interface": "auto",
+  "is_loopback": false
+}
+```
+
 ```json
 {
   "pairing_token": "local-session-token"
@@ -58,7 +75,15 @@ An invalid token leaves `network_paired` false and returns
   "state": "DEVICE_CHECKING",
   "last_error": null,
   "capability_report": null,
-  "network_paired": true
+  "network_paired": true,
+  "network_config": {
+    "api_base_url": "http://192.168.1.20:8000",
+    "websocket_base_url": "ws://192.168.1.20:8000",
+    "host": "192.168.1.20",
+    "port": 8000,
+    "detected_interface": "auto",
+    "is_loopback": false
+  }
 }
 ```
 

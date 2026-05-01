@@ -1,8 +1,10 @@
+import os
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
 
 from .contracts import CapabilityReport, CreateSessionResponse, PairSessionRequest, SessionSnapshot
+from .network import DEFAULT_API_PORT, local_network_config
 from .sessions import SessionStore
 
 app = FastAPI(title="Room Boundary Scanner API", version="0.1.0")
@@ -16,12 +18,17 @@ def health() -> dict[str, str]:
 
 @app.post("/sessions", response_model=CreateSessionResponse)
 def create_session() -> CreateSessionResponse:
-    session = store.create()
+    network_config = local_network_config(
+        public_api_url=os.getenv("ROOM_SCANNER_PUBLIC_API_URL"),
+        api_port=int(os.getenv("ROOM_SCANNER_API_PORT", str(DEFAULT_API_PORT))),
+    )
+    session = store.create(network_config)
     return CreateSessionResponse(
         session_id=session.session_id,
         pairing_token=session.pairing_token,
         state=session.state,
         websocket_path=f"/sessions/{session.session_id}/telemetry",
+        network_config=session.network_config,
     )
 
 

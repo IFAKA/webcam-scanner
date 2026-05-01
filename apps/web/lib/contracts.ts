@@ -50,10 +50,28 @@ export type CapabilityReport = {
   failure_reason: ScannerError | null;
 };
 
+export type LocalNetworkConfig = {
+  api_base_url: string;
+  websocket_base_url: string;
+  host: string;
+  port: number;
+  detected_interface: string;
+  is_loopback: boolean;
+};
+
+export type CreateSessionResponse = {
+  session_id: string;
+  pairing_token: string;
+  state: ScanState;
+  websocket_path: string;
+  network_config: LocalNetworkConfig;
+};
+
 export type SessionSnapshot = {
   session_id: string;
   state: ScanState;
   last_error: ScannerError | null;
   capability_report: CapabilityReport | null;
   network_paired: boolean;
+  network_config: LocalNetworkConfig | null;
 };

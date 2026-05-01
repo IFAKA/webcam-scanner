@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from secrets import token_urlsafe
 from uuid import UUID, uuid4
 
-from .contracts import CapabilityReport, ScanState, ScannerError, ScannerErrorCode, SessionSnapshot
+from .contracts import CapabilityReport, LocalNetworkConfig, ScanState, ScannerError, ScannerErrorCode, SessionSnapshot
 from .errors import make_error
 
 
@@ -10,6 +10,7 @@ from .errors import make_error
 class SessionRecord:
     session_id: UUID
     pairing_token: str
+    network_config: LocalNetworkConfig
     state: ScanState = ScanState.CREATED
     network_paired: bool = False
     capability_report: CapabilityReport | None = None
@@ -20,8 +21,12 @@ class SessionStore:
     def __init__(self) -> None:
         self._sessions: dict[UUID, SessionRecord] = {}
 
-    def create(self) -> SessionRecord:
-        session = SessionRecord(session_id=uuid4(), pairing_token=token_urlsafe(24))
+    def create(self, network_config: LocalNetworkConfig) -> SessionRecord:
+        session = SessionRecord(
+            session_id=uuid4(),
+            pairing_token=token_urlsafe(24),
+            network_config=network_config,
+        )
         self._sessions[session.session_id] = session
         return session
 
@@ -39,6 +44,7 @@ class SessionStore:
             last_error=session.last_error,
             capability_report=session.capability_report,
             network_paired=session.network_paired,
+            network_config=session.network_config,
         )
 
     def pair(self, session_id: UUID, pairing_token: str) -> SessionRecord | None:

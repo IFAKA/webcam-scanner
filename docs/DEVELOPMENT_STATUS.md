@@ -18,16 +18,16 @@ with every code change.
       phone-reported network flag.
 - [x] Android scanner can pair with the local FastAPI endpoint using a
       desktop-provided API URL, session ID, and pairing token.
+- [x] Desktop UI creates a backend session and displays pairing values for the
+      Android scanner.
+- [x] Add local network configuration for phone-to-laptop API discovery.
 
 ## Current
 
-- [ ] Display real backend-created session and pairing information in the
-      desktop UI.
+- [ ] Submit Android capability reports to the backend after successful pairing.
 
 ## Next
 
-- [ ] Add local network configuration for phone-to-laptop API discovery.
-- [ ] Submit Android capability reports to the backend after successful pairing.
 - [ ] Keep scan capture blocked until all required capabilities pass.
 
 ## Verification

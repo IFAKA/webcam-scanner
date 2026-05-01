@@ -52,7 +52,21 @@ UNKNOWN_INTERNAL_ERROR
 - Add backend capability evaluation and diagnostics skeleton.
 - Add desktop UI shell showing blocked/ready capability state.
 - Add native Android scanner shell with ARCore Depth capability checks.
+- Treat the Vercel Web Interface Guidelines as the desktop UI acceptance checklist: keyboard access, visible focus, resilient layout, designed loading/error/blocked states, redundant status cues, and no dead-end screens.
+- Use the `emil-design-eng` skill for UI polish review when changing `apps/web`.
 - Keep every commit under 1000 changed lines.
+
+## Step Completion Rule
+
+After each implementation step:
+
+1. Run the relevant tests and type checks.
+2. Validate the changed flow works locally.
+3. Fix any failures before continuing.
+4. Commit the tested changes.
+5. Push the commit before starting the next step.
+
+Do not stack multiple unpushed implementation steps unless explicitly requested.
 
 ## Next Slices
 

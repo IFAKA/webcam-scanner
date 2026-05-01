@@ -49,7 +49,7 @@ class MainActivity : Activity() {
             setPadding(32, 32, 32, 16)
         }
         apiBaseUrlInput = EditText(this).apply {
-            hint = "Local API URL, e.g. http://192.168.1.20:8000"
+            hint = "Phone API URL from desktop, e.g. http://192.168.1.20:8000"
             setSingleLine(true)
         }
         sessionIdInput = EditText(this).apply {

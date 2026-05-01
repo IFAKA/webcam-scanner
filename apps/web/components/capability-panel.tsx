@@ -19,10 +19,12 @@ export function CapabilityPanel({
 }) {
   return (
     <section className="panel">
-      <h2>Device Gate</h2>
-      <span className={`status ${report?.can_scan ? "ok" : "fail"}`}>
-        {report?.can_scan ? "Ready to scan" : "Scan blocked"}
-      </span>
+      <div className="panel-heading">
+        <h2>Device Gate</h2>
+        <span className={`status ${report?.can_scan ? "ok" : "fail"}`}>
+          {report?.can_scan ? "Ready to scan" : "Scan blocked"}
+        </span>
+      </div>
 
       <div className="checklist">
         {checks.map(([key, label]) => {

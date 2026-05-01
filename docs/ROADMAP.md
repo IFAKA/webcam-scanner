@@ -7,6 +7,7 @@
 - Local backend session and diagnostics skeleton.
 - Desktop status UI shell.
 - Android capability-gate skeleton.
+- Desktop UI quality baseline: Vercel Web Interface Guidelines plus `emil-design-eng` polish review for accessibility, focus, resilient layout, and clear blocked/error states.
 
 ## Phase 1: Real Device Capability Probe
 

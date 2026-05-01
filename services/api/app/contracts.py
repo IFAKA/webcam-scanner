@@ -78,11 +78,21 @@ class CapabilityReport(BaseModel):
     failure_reason: ScannerError | None = None
 
 
+class LocalNetworkConfig(BaseModel):
+    api_base_url: str
+    websocket_base_url: str
+    host: str
+    port: int
+    detected_interface: str
+    is_loopback: bool
+
+
 class CreateSessionResponse(BaseModel):
     session_id: UUID
     pairing_token: str
     state: ScanState
     websocket_path: str
+    network_config: LocalNetworkConfig
 
 
 class PairSessionRequest(BaseModel):
@@ -95,3 +105,4 @@ class SessionSnapshot(BaseModel):
     last_error: ScannerError | None = None
     capability_report: CapabilityReport | None = None
     network_paired: bool = False
+    network_config: LocalNetworkConfig | None = None
