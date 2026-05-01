@@ -4,6 +4,8 @@ import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
+import java.util.Base64
 import org.json.JSONObject
 
 class PairingClient {
@@ -233,6 +235,60 @@ class PairingClient {
         }
     }
 
+    fun submitFrameArtifacts(
+        apiBaseUrl: String,
+        sessionId: String,
+        artifacts: CaptureFrameArtifacts,
+    ): FrameArtifactUploadResult {
+        if (apiBaseUrl.isBlank() || sessionId.isBlank()) {
+            return FrameArtifactUploadResult.Failure("Local API URL and session ID are required.")
+        }
+
+        var connection: HttpURLConnection? = null
+        return try {
+            val baseUrl = apiBaseUrl.trim().trimEnd('/')
+            val endpoint = URL("$baseUrl/sessions/${sessionId.trim()}/frames/artifacts")
+            connection = endpoint.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 15_000
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Accept", "application/json")
+            connection.doOutput = true
+
+            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
+                writer.write(artifacts.toServerJson().toString())
+            }
+
+            val responseBody = readResponse(connection)
+            if (connection.responseCode in 200..299) {
+                val response = JSONObject(responseBody)
+                val captureFrames = response.optJSONObject("capture_frames")
+                val latestFrame = captureFrames?.optJSONObject("latest_frame")
+                val processing = response.optJSONObject("processing")
+                val error = response.optJSONObject("last_error")
+                FrameArtifactUploadResult.Success(
+                    state = response.optString("state", "UNKNOWN"),
+                    uploaded = latestFrame?.optBoolean("raw_artifacts_uploaded", false) == true && error == null,
+                    processingStatus = processing?.optString("status", "BLOCKED") ?: "BLOCKED",
+                    errorCode = error?.optString("code"),
+                    errorMessage = error?.optString("message"),
+                    rawResponse = responseBody,
+                )
+            } else {
+                FrameArtifactUploadResult.Failure(
+                    "Frame artifact upload failed with HTTP ${connection.responseCode}: $responseBody",
+                )
+            }
+        } catch (error: Exception) {
+            FrameArtifactUploadResult.Failure(
+                "Frame artifact upload request failed: ${error.message ?: error.javaClass.simpleName}",
+            )
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
     private fun CapabilityReport.toServerJson(): JSONObject =
         JSONObject()
             .put("device_model", deviceModel)
@@ -267,6 +323,25 @@ class PairingClient {
             .put("color_image_filename", colorImageFilename ?: JSONObject.NULL)
             .put("depth_filename", depthFilename ?: JSONObject.NULL)
             .put("confidence_filename", confidenceFilename ?: JSONObject.NULL)
+
+    private fun CaptureFrameArtifacts.toServerJson(): JSONObject =
+        JSONObject()
+            .put("frame_index", frameIndex)
+            .put("color_image", colorImage.toServerJson())
+            .put("raw_depth", rawDepth.toServerJson())
+            .put("confidence", confidence.toServerJson())
+
+    private fun CaptureArtifactPayload.toServerJson(): JSONObject =
+        JSONObject()
+            .put("filename", filename)
+            .put("content_base64", Base64.getEncoder().encodeToString(bytes))
+            .put("media_type", mediaType ?: JSONObject.NULL)
+            .put("sha256", sha256 ?: bytes.sha256())
+
+    private fun ByteArray.sha256(): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(this)
+        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
+    }
 
     private fun FloatArray.toJsonArray(): org.json.JSONArray {
         val array = org.json.JSONArray()
@@ -333,4 +408,17 @@ sealed class FrameSubmissionResult {
     ) : FrameSubmissionResult()
 
     data class Failure(val message: String) : FrameSubmissionResult()
+}
+
+sealed class FrameArtifactUploadResult {
+    data class Success(
+        val state: String,
+        val uploaded: Boolean,
+        val processingStatus: String,
+        val errorCode: String?,
+        val errorMessage: String?,
+        val rawResponse: String,
+    ) : FrameArtifactUploadResult()
+
+    data class Failure(val message: String) : FrameArtifactUploadResult()
 }

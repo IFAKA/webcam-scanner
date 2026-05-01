@@ -1,3 +1,6 @@
+import base64
+import hashlib
+
 from fastapi.testclient import TestClient
 
 from app import main
@@ -52,6 +55,30 @@ def frame_payload(**overrides):
         "color_image_filename": None,
         "depth_filename": None,
         "confidence_filename": None,
+    }
+    values.update(overrides)
+    return values
+
+
+def artifact_payload(frame_index=0, **overrides):
+    def encoded(name, content, media_type):
+        raw = content.encode("utf-8")
+        return {
+            "filename": name,
+            "content_base64": base64.b64encode(raw).decode("ascii"),
+            "media_type": media_type,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+
+    values = {
+        "frame_index": frame_index,
+        "color_image": encoded(f"color-{frame_index:06d}.rgb", f"color-{frame_index}", "application/octet-stream"),
+        "raw_depth": encoded(f"depth-{frame_index:06d}.raw", f"depth-{frame_index}", "application/octet-stream"),
+        "confidence": encoded(
+            f"confidence-{frame_index:06d}.raw",
+            f"confidence-{frame_index}",
+            "application/octet-stream",
+        ),
     }
     values.update(overrides)
     return values
@@ -346,3 +373,118 @@ def test_processing_is_blocked_until_raw_artifacts_are_uploaded(tmp_path):
     assert snapshot["processing"]["geometry"] is None
     assert snapshot["last_error"]["code"] == ScannerErrorCode.UPLOAD_INCOMPLETE
     assert "raw artifact upload confirmation" in snapshot["processing"]["blocked_reason"]
+
+
+def test_artifact_upload_is_blocked_until_frame_metadata_exists(tmp_path):
+    api = client(capture_root=tmp_path)
+    created = api.post("/sessions").json()
+
+    response = api.post(
+        f"/sessions/{created['session_id']}/frames/artifacts",
+        json=artifact_payload(frame_index=3),
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["capture_frames"]["persisted_count"] == 0
+    assert snapshot["last_error"]["code"] == ScannerErrorCode.UPLOAD_INCOMPLETE
+    assert snapshot["last_error"]["stage"] == "frame_upload"
+    assert snapshot["last_error"]["details"]["frame_id"] == "00000003"
+
+
+def test_artifact_upload_rejects_invalid_hash(tmp_path):
+    api = client(capture_root=tmp_path)
+    created = api.post("/sessions").json()
+    api.post(
+        f"/sessions/{created['session_id']}/pair",
+        json={"pairing_token": created["pairing_token"]},
+    )
+    api.post(
+        f"/sessions/{created['session_id']}/capabilities",
+        json=capability_payload(network_paired=False, can_scan=False),
+    )
+    api.post(f"/sessions/{created['session_id']}/scan/start")
+    api.post(f"/sessions/{created['session_id']}/frames", json=frame_payload(frame_index=3))
+
+    response = api.post(
+        f"/sessions/{created['session_id']}/frames/artifacts",
+        json=artifact_payload(frame_index=3, color_image={**artifact_payload(3)["color_image"], "sha256": "0" * 64}),
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["capture_frames"]["latest_frame"]["raw_artifacts_uploaded"] is False
+    assert snapshot["last_error"]["code"] == ScannerErrorCode.SESSION_SCHEMA_INVALID
+    assert snapshot["last_error"]["stage"] == "frame_upload"
+
+
+def test_artifact_upload_marks_frame_ready_for_processing(tmp_path):
+    api = client(capture_root=tmp_path)
+    created = api.post("/sessions").json()
+    api.post(
+        f"/sessions/{created['session_id']}/pair",
+        json={"pairing_token": created["pairing_token"]},
+    )
+    api.post(
+        f"/sessions/{created['session_id']}/capabilities",
+        json=capability_payload(network_paired=False, can_scan=False),
+    )
+    api.post(f"/sessions/{created['session_id']}/scan/start")
+    api.post(f"/sessions/{created['session_id']}/frames", json=frame_payload(frame_index=3))
+
+    response = api.post(
+        f"/sessions/{created['session_id']}/frames/artifacts",
+        json=artifact_payload(frame_index=3),
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    latest = snapshot["capture_frames"]["latest_frame"]
+    assert latest["raw_artifacts_uploaded"] is True
+    assert latest["metadata"]["color_image_filename"] == "color-000003.rgb"
+    assert latest["metadata"]["depth_filename"] == "depth-000003.raw"
+    assert latest["metadata"]["confidence_filename"] == "confidence-000003.raw"
+    assert set(latest["artifacts"]) == {"color_image", "raw_depth", "confidence"}
+    assert snapshot["processing"]["status"] == "READY_TO_PROCESS"
+    assert snapshot["processing"]["blocked_reason"] is None
+
+    artifact_files = sorted(path.name for path in tmp_path.rglob("*") if path.is_file())
+    assert "artifacts.jsonl" in artifact_files
+    assert "color-000003.rgb" in artifact_files
+    assert "depth-000003.raw" in artifact_files
+    assert "confidence-000003.raw" in artifact_files
+
+
+def test_processing_succeeds_after_tracked_artifact_uploads(tmp_path):
+    api = client(capture_root=tmp_path)
+    created = api.post("/sessions").json()
+    api.post(
+        f"/sessions/{created['session_id']}/pair",
+        json={"pairing_token": created["pairing_token"]},
+    )
+    api.post(
+        f"/sessions/{created['session_id']}/capabilities",
+        json=capability_payload(network_paired=False, can_scan=False),
+    )
+    api.post(f"/sessions/{created['session_id']}/scan/start")
+
+    positions = [(0.0, 0.0, 0.0), (2.0, 0.0, 0.5), (1.0, 0.0, 3.0)]
+    for frame_index, position in enumerate(positions):
+        api.post(
+            f"/sessions/{created['session_id']}/frames",
+            json=frame_payload(frame_index=frame_index, camera_position_m=position),
+        )
+        api.post(
+            f"/sessions/{created['session_id']}/frames/artifacts",
+            json=artifact_payload(frame_index=frame_index),
+        )
+
+    response = api.post(f"/sessions/{created['session_id']}/processing/start")
+
+    assert response.status_code == 200
+    snapshot = response.json()
+    assert snapshot["state"] == "READY_FOR_REVIEW"
+    assert snapshot["last_error"] is None
+    assert snapshot["processing"]["status"] == "READY_FOR_REVIEW"
+    assert snapshot["processing"]["geometry"]["source_frame_count"] == 3
+    assert snapshot["processing"]["geometry"]["floor_outline_m"] == [[0.0, 0.0], [2.0, 0.0], [2.0, 3.0], [0.0, 3.0]]

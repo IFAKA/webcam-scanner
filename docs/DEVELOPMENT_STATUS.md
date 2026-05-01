@@ -30,13 +30,18 @@ with every code change.
 - [x] Persist captured scan frame metadata in a local upload manifest.
 - [x] Add processing endpoint and desktop status for review geometry generation
       blocked on missing raw scan artifacts.
+- [x] Add backend storage and Android client contract for raw RGB, raw depth,
+      and confidence artifact uploads.
 
 ## Current
 
-- [ ] Upload raw RGB, raw depth, and confidence artifacts from Android.
+- [ ] Capture real ARCore color, raw depth, and confidence bytes in the Android
+      scanner loop.
 
 ## Next
 
+- [ ] Upload captured Android ARCore artifacts through the frame artifact
+      endpoint.
 - [ ] Process uploaded scan data into reviewable room geometry.
 - [ ] Add desktop review controls for boundaries, dimensions, and export.
 

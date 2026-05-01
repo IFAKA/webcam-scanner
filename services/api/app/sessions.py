@@ -1,11 +1,18 @@
+import base64
+import binascii
+import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from secrets import token_urlsafe
+from typing import NamedTuple
 from uuid import UUID, uuid4
 
 from .contracts import (
+    CaptureArtifactPayload,
+    CaptureArtifactRecord,
+    CaptureFrameArtifactUpload,
     CapabilityReport,
     CaptureFrameMetadata,
     CaptureFrameRecord,
@@ -132,6 +139,74 @@ class SessionStore:
             manifest_path=str(manifest_path),
         )
         session.capture_frame_records.append(record)
+        session.processing = evaluate_processing_inputs(session)
+        session.last_error = None
+        return session
+
+    def upload_frame_artifacts(
+        self,
+        session_id: UUID,
+        upload: CaptureFrameArtifactUpload,
+    ) -> SessionRecord | None:
+        session = self.get(session_id)
+        if session is None:
+            return None
+
+        frame_id = f"{upload.frame_index:08d}"
+        record = next((candidate for candidate in session.capture_frame_records if candidate.frame_id == frame_id), None)
+        if record is None:
+            session.last_error = make_error(
+                ScannerErrorCode.UPLOAD_INCOMPLETE,
+                stage="frame_upload",
+                recoverable=True,
+                session_id=session_id,
+                details={"frame_id": frame_id, "frame_index": upload.frame_index},
+            )
+            return session
+
+        try:
+            artifacts = write_frame_artifacts(
+                session_dir=self._capture_root / str(session.session_id),
+                frame_id=frame_id,
+                upload=upload,
+            )
+        except ValueError as error:
+            session.last_error = make_error(
+                ScannerErrorCode.SESSION_SCHEMA_INVALID,
+                stage="frame_upload",
+                recoverable=True,
+                session_id=session_id,
+                details={"frame_id": frame_id, "reason": str(error)},
+            )
+            return session
+
+        record.artifacts = artifacts
+        record.raw_artifacts_uploaded = True
+        record.metadata = record.metadata.model_copy(
+            update={
+                "color_image_filename": artifacts["color_image"].filename,
+                "depth_filename": artifacts["raw_depth"].filename,
+                "confidence_filename": artifacts["confidence"].filename,
+            }
+        )
+
+        if session.capture_frames.latest_frame and session.capture_frames.latest_frame.frame_id == frame_id:
+            session.capture_frames.latest_frame = record
+
+        manifest_path = self._capture_root / str(session.session_id) / "artifacts.jsonl"
+        with manifest_path.open("a", encoding="utf-8") as manifest:
+            manifest.write(
+                json.dumps(
+                    {
+                        "frame_id": frame_id,
+                        "uploaded_at": datetime.now(UTC).isoformat(),
+                        "artifacts": {name: artifact.model_dump(mode="json") for name, artifact in artifacts.items()},
+                    },
+                    separators=(",", ":"),
+                )
+            )
+            manifest.write("\n")
+
         session.processing = evaluate_processing_inputs(session)
         session.last_error = None
         return session
@@ -333,6 +408,62 @@ def evaluate_processing_inputs(session: SessionRecord) -> ProcessingSummary:
         input_frame_count=len(records),
         available_artifacts=available_artifacts,
         blocked_reason=None,
+    )
+
+
+def write_frame_artifacts(
+    session_dir: Path,
+    frame_id: str,
+    upload: CaptureFrameArtifactUpload,
+) -> dict[str, CaptureArtifactRecord]:
+    artifact_dir = session_dir / "artifacts" / frame_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    prepared = {
+        "color_image": prepare_artifact(upload.color_image),
+        "raw_depth": prepare_artifact(upload.raw_depth),
+        "confidence": prepare_artifact(upload.confidence),
+    }
+    return {name: write_artifact(artifact_dir, artifact) for name, artifact in prepared.items()}
+
+
+class PreparedArtifact(NamedTuple):
+    filename: str
+    content: bytes
+    sha256: str
+    media_type: str | None
+
+
+def prepare_artifact(artifact: CaptureArtifactPayload) -> PreparedArtifact:
+    filename = Path(artifact.filename).name
+    if filename in {"", ".", ".."}:
+        raise ValueError("Artifact filename must resolve to a local file name.")
+
+    try:
+        content = base64.b64decode(artifact.content_base64, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise ValueError(f"{filename} is not valid base64.") from error
+
+    digest = hashlib.sha256(content).hexdigest()
+    if artifact.sha256 is not None and artifact.sha256.lower() != digest:
+        raise ValueError(f"{filename} sha256 does not match uploaded content.")
+
+    return PreparedArtifact(
+        filename=filename,
+        content=content,
+        sha256=digest,
+        media_type=artifact.media_type,
+    )
+
+
+def write_artifact(artifact_dir: Path, artifact: PreparedArtifact) -> CaptureArtifactRecord:
+    output_path = artifact_dir / artifact.filename
+    output_path.write_bytes(artifact.content)
+    return CaptureArtifactRecord(
+        filename=artifact.filename,
+        path=str(output_path),
+        byte_size=len(artifact.content),
+        sha256=artifact.sha256,
+        media_type=artifact.media_type,
     )
 
 

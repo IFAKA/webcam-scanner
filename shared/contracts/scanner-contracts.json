@@ -30,5 +30,10 @@
     "GEOMETRY_POLYGON_INVALID",
     "EXPORT_FAILED",
     "UNKNOWN_INTERNAL_ERROR"
+  ],
+  "artifactKinds": [
+    "color_image",
+    "raw_depth",
+    "confidence"
   ]
 }

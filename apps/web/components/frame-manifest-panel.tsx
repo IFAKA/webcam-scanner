@@ -6,6 +6,9 @@ const receivedAtFormatter = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
   second: "2-digit",
 });
+const byteFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
 
 export function FrameManifestPanel({
   state,
@@ -19,6 +22,8 @@ export function FrameManifestPanel({
   const statusLabel = hasFrames ? "Persisting" : state === "SCANNING" ? "Waiting" : "Blocked";
   const latestFrame = captureFrames.latest_frame;
   const latestReceipt = latestFrame ? receivedAtFormatter.format(new Date(latestFrame.received_at)) : "None";
+  const artifactEntries = latestFrame ? Object.entries(latestFrame.artifacts) : [];
+  const uploadedBytes = artifactEntries.reduce((total, [, artifact]) => total + artifact.byte_size, 0);
 
   return (
     <section className="panel" aria-labelledby="frame-manifest-heading">
@@ -29,7 +34,7 @@ export function FrameManifestPanel({
 
       <p className="network-note">
         {state === "SCANNING"
-          ? "Android frame metadata is persisted locally for the upload package. Raw RGB and depth files are still pending."
+          ? "Android frame metadata is persisted locally for the upload package. Raw RGB, raw depth, and confidence files are tracked separately."
           : "Frame metadata is blocked until the backend session is SCANNING."}
       </p>
 
@@ -46,6 +51,10 @@ export function FrameManifestPanel({
           <span>Raw files</span>
           <strong>{latestFrame?.raw_artifacts_uploaded ? "Uploaded" : "Pending"}</strong>
         </div>
+        <div className="metric">
+          <span>Uploaded bytes</span>
+          <strong>{byteFormatter.format(uploadedBytes)}</strong>
+        </div>
       </div>
 
       {latestFrame ? (
@@ -53,6 +62,22 @@ export function FrameManifestPanel({
           Latest frame <code translate="no">#{latestFrame.metadata.frame_index}</code> is stored in{" "}
           <code translate="no">{latestFrame.metadata_path}</code> with tracking{" "}
           <code translate="no">{latestFrame.metadata.tracking_state}</code>.
+        </p>
+      ) : null}
+
+      {artifactEntries.length > 0 ? (
+        <ul className="artifact-list" aria-label="Latest frame raw artifacts">
+          {artifactEntries.map(([name, artifact]) => (
+            <li key={name}>
+              <span>{name.replaceAll("_", " ")}</span>
+              <code translate="no">{artifact.filename}</code>
+              <span>{byteFormatter.format(artifact.byte_size)} bytes</span>
+            </li>
+          ))}
+        </ul>
+      ) : latestFrame ? (
+        <p className="network-note telemetry-detail error">
+          Latest frame metadata is stored, but raw artifact upload has not completed for this frame.
         </p>
       ) : null}
     </section>

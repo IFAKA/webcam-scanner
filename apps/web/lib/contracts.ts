@@ -99,12 +99,21 @@ export type CaptureFrameMetadata = {
   confidence_filename: string | null;
 };
 
+export type CaptureArtifactRecord = {
+  filename: string;
+  path: string;
+  byte_size: number;
+  sha256: string;
+  media_type: string | null;
+};
+
 export type CaptureFrameRecord = {
   frame_id: string;
   metadata: CaptureFrameMetadata;
   received_at: string;
   metadata_path: string;
   raw_artifacts_uploaded: boolean;
+  artifacts: Record<string, CaptureArtifactRecord>;
 };
 
 export type CaptureFrameSummary = {

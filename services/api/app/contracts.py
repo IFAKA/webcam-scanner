@@ -134,12 +134,35 @@ class CaptureFrameMetadata(BaseModel):
     confidence_filename: str | None = Field(default=None, min_length=1)
 
 
+class CaptureArtifactPayload(BaseModel):
+    filename: str = Field(min_length=1)
+    content_base64: str = Field(min_length=1)
+    media_type: str | None = Field(default=None, min_length=1)
+    sha256: str | None = Field(default=None, min_length=64, max_length=64)
+
+
+class CaptureFrameArtifactUpload(BaseModel):
+    frame_index: int = Field(ge=0)
+    color_image: CaptureArtifactPayload
+    raw_depth: CaptureArtifactPayload
+    confidence: CaptureArtifactPayload
+
+
+class CaptureArtifactRecord(BaseModel):
+    filename: str
+    path: str
+    byte_size: int = Field(ge=0)
+    sha256: str
+    media_type: str | None = None
+
+
 class CaptureFrameRecord(BaseModel):
     frame_id: str
     metadata: CaptureFrameMetadata
     received_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata_path: str
     raw_artifacts_uploaded: bool = False
+    artifacts: dict[str, CaptureArtifactRecord] = Field(default_factory=dict)
 
 
 class CaptureFrameSummary(BaseModel):

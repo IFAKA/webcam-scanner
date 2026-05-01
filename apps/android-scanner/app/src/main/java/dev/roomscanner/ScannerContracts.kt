@@ -91,3 +91,17 @@ data class CaptureFrameMetadata(
     val depthFilename: String? = null,
     val confidenceFilename: String? = null,
 )
+
+data class CaptureArtifactPayload(
+    val filename: String,
+    val bytes: ByteArray,
+    val mediaType: String? = null,
+    val sha256: String? = null,
+)
+
+data class CaptureFrameArtifacts(
+    val frameIndex: Int,
+    val colorImage: CaptureArtifactPayload,
+    val rawDepth: CaptureArtifactPayload,
+    val confidence: CaptureArtifactPayload,
+)

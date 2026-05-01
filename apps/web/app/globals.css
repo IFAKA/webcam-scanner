@@ -227,6 +227,40 @@ button:disabled {
   margin: 14px 0 0;
 }
 
+.artifact-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.artifact-list li {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(96px, 0.8fr) minmax(0, 1.4fr) auto;
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.artifact-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.artifact-list code {
+  background: #ebe4d6;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 4px 6px;
+}
+
 .primary-action {
   background: var(--ink);
   border: 1px solid var(--ink);
@@ -298,6 +332,11 @@ pre {
   }
 
   .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .artifact-list li {
+    align-items: start;
     grid-template-columns: 1fr;
   }
 }

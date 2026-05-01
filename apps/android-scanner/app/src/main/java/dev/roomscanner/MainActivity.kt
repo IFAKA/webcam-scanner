@@ -24,6 +24,7 @@ class MainActivity : Activity() {
     private var backendReadyForScan = false
     private var isScanStarted = false
     private var telemetryFrameIndex = 0
+    private var rawArtifactPendingFrames = 0
     @Volatile private var isTelemetryStreaming = false
     private var telemetryThread: Thread? = null
     private var pairingStatus = "Pair with the local laptop server before scanning."
@@ -140,6 +141,7 @@ class MainActivity : Activity() {
                         backendReadyForScan = capabilityStatus?.backendReadyForScan == true
                         isScanStarted = false
                         telemetryFrameIndex = 0
+                        rawArtifactPendingFrames = 0
                         pairingStatus = if (result.networkPaired) {
                             capabilityStatus?.message
                                 ?: "Phone is paired, but capability reporting did not run."
@@ -152,6 +154,7 @@ class MainActivity : Activity() {
                         backendReadyForScan = false
                         isScanStarted = false
                         telemetryFrameIndex = 0
+                        rawArtifactPendingFrames = 0
                         pairingStatus = result.message
                     }
                 }
@@ -252,8 +255,15 @@ class MainActivity : Activity() {
                                 sessionId = sessionId,
                                 metadata = sample.toCaptureFrameMetadata(),
                             )
+                            val artifactResult = sample.toCaptureFrameArtifacts()?.let { artifacts ->
+                                pairingClient.submitFrameArtifacts(
+                                    apiBaseUrl = apiBaseUrl,
+                                    sessionId = sessionId,
+                                    artifacts = artifacts,
+                                )
+                            }
                             runOnUiThread {
-                                handleAcceptedTelemetry(result, frameResult)
+                                handleAcceptedTelemetry(result, frameResult, artifactResult)
                                 updateCapabilityState()
                             }
                         } else {
@@ -290,11 +300,16 @@ class MainActivity : Activity() {
     private fun handleAcceptedTelemetry(
         telemetryResult: TelemetrySubmissionResult.Success,
         frameResult: FrameSubmissionResult,
+        artifactResult: FrameArtifactUploadResult?,
     ) {
         when (frameResult) {
             is FrameSubmissionResult.Success -> {
                 if (frameResult.accepted && frameResult.state == "SCANNING") {
-                    pairingStatus = "Live telemetry streaming. Backend received ${telemetryResult.frameCount} samples and persisted ${frameResult.persistedCount} frame metadata records."
+                    pairingStatus = frameUploadStatus(
+                        telemetryResult = telemetryResult,
+                        frameResult = frameResult,
+                        artifactResult = artifactResult,
+                    )
                     isScanStarted = true
                 } else {
                     val reason = listOfNotNull(frameResult.errorCode, frameResult.errorMessage).joinToString(": ")
@@ -342,6 +357,39 @@ class MainActivity : Activity() {
             confidenceFrameAvailable = confidenceFrameAvailable,
         )
 
+    private fun ScanTelemetrySample.toCaptureFrameArtifacts(): CaptureFrameArtifacts? {
+        // This remains null until the scanner loop owns real ARCore color, raw depth, and confidence bytes.
+        return null
+    }
+
+    private fun frameUploadStatus(
+        telemetryResult: TelemetrySubmissionResult.Success,
+        frameResult: FrameSubmissionResult.Success,
+        artifactResult: FrameArtifactUploadResult?,
+    ): String {
+        val baseStatus = "Live telemetry streaming. Backend received ${telemetryResult.frameCount} samples and persisted ${frameResult.persistedCount} frame metadata records."
+        return when (artifactResult) {
+            null -> {
+                rawArtifactPendingFrames = frameResult.persistedCount
+                "$baseStatus Raw RGB, raw depth, and confidence upload is waiting for real ARCore frame bytes."
+            }
+            is FrameArtifactUploadResult.Success -> {
+                if (artifactResult.uploaded) {
+                    rawArtifactPendingFrames = 0
+                    "$baseStatus Raw artifacts uploaded; processing status is ${artifactResult.processingStatus}."
+                } else {
+                    rawArtifactPendingFrames += 1
+                    val reason = listOfNotNull(artifactResult.errorCode, artifactResult.errorMessage).joinToString(": ")
+                    "$baseStatus Raw artifact upload is blocked in ${artifactResult.state}. $reason"
+                }
+            }
+            is FrameArtifactUploadResult.Failure -> {
+                rawArtifactPendingFrames += 1
+                "$baseStatus ${artifactResult.message}"
+            }
+        }
+    }
+
     private fun buildStatus(
         headline: String,
         report: CapabilityReport,
@@ -363,6 +411,7 @@ class MainActivity : Activity() {
             Device: ${identity.device}
             Product: ${identity.product}
             Android SDK: ${identity.androidSdk}
+            Raw artifact frames pending upload: $rawArtifactPendingFrames
 
             $checks
         """.trimIndent()

@@ -87,6 +87,40 @@ An invalid token leaves `network_paired` false and returns
 }
 ```
 
+## Frame Artifact Upload
+
+Frame metadata is created with `POST /sessions/{session_id}/frames`. Raw
+artifacts are uploaded separately with `POST /sessions/{session_id}/frames/artifacts`
+after Android has real frame bytes.
+
+```json
+{
+  "frame_index": 8,
+  "color_image": {
+    "filename": "color-000008.rgb",
+    "content_base64": "base64-encoded-bytes",
+    "media_type": "application/octet-stream",
+    "sha256": "64-character-hex-digest"
+  },
+  "raw_depth": {
+    "filename": "depth-000008.raw",
+    "content_base64": "base64-encoded-bytes",
+    "media_type": "application/octet-stream",
+    "sha256": "64-character-hex-digest"
+  },
+  "confidence": {
+    "filename": "confidence-000008.raw",
+    "content_base64": "base64-encoded-bytes",
+    "media_type": "application/octet-stream",
+    "sha256": "64-character-hex-digest"
+  }
+}
+```
+
+The backend writes artifacts under the local capture directory, records
+`artifacts.jsonl`, verifies optional SHA-256 digests, and only then marks the
+frame `raw_artifacts_uploaded`.
+
 ## Scanner Error
 
 ```json

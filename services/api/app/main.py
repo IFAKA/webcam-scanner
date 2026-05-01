@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 
 from .contracts import (
     CapabilityReport,
+    CaptureFrameArtifactUpload,
     CaptureFrameMetadata,
     CreateSessionResponse,
     PairSessionRequest,
@@ -98,6 +99,18 @@ def submit_telemetry(session_id: UUID, sample: ScanTelemetrySample) -> SessionSn
 @app.post("/sessions/{session_id}/frames", response_model=SessionSnapshot)
 def submit_capture_frame(session_id: UUID, metadata: CaptureFrameMetadata) -> SessionSnapshot:
     session = store.record_capture_frame(session_id, metadata)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    snapshot = store.snapshot(session_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return snapshot
+
+
+@app.post("/sessions/{session_id}/frames/artifacts", response_model=SessionSnapshot)
+def upload_capture_frame_artifacts(session_id: UUID, upload: CaptureFrameArtifactUpload) -> SessionSnapshot:
+    session = store.upload_frame_artifacts(session_id, upload)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
